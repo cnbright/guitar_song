@@ -3,12 +3,18 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const state = {file: null, id: null, score: null, pattern: 'arpeggio', page: 0, busy: false, dirty: false, edit: null, chords: [], generation: 0};
 const PAGE_SIZE = 12;
+const BROWSER_MODE = window.STRINGSPACE_MODE === 'browser';
+if (BROWSER_MODE) {
+  $('#processing-location').textContent = '浏览器处理 · 音频不上传';
+  $('.help-note').insertAdjacentHTML('afterend', '<p class="field-hint">网页版直接在浏览器内分析音乐，无需安装软件。可用格式取决于浏览器；优先使用 MP3、WAV 或 M4A。关闭页面会中断正在进行的分析，已完成作品保存在当前浏览器。</p>');
+}
 const esc = (value) => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clock = value => `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
 let toastTimer, audioContext, playbackTimer, playingNodes = [], playing = false;
 
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 4500); }
 async function api(url, options = {}) {
+  if (BROWSER_MODE) return window.StringspaceBrowser.api(url, options);
   const response = await fetch(url, options);
   if (!response.ok) {
     let detail;
@@ -94,12 +100,16 @@ function acceptScore(score) {
   $('#score-meta').innerHTML = `<div><small>速度 · 估计</small><strong>${score.bpm} <i>BPM</i></strong></div><div><small>原调 · 估计</small><strong>${esc(score.key)}</strong></div><div><small>变调夹</small><strong>${score.config.capo ? score.config.capo + ' <i>品</i>' : '无'}</strong></div><div><small>演奏方式</small><strong><i>${score.config.pattern === 'strum' ? '扫弦伴奏' : '分解和弦'} · ${score.config.meter}/4</i></strong></div>`;
   const peak = Math.max(...score.waveform, 0.01);
   $('#waveform').innerHTML = score.waveform.filter((_, i) => i % 2 === 0).map(v => `<i style="height:${Math.max(3, v / peak * 38)}px"></i>`).join('');
-  const audioUrl = `/api/jobs/${state.id}/audio`;
+  const audioUrl = BROWSER_MODE ? window.StringspaceBrowser.audioURL(state.id) : `/api/jobs/${state.id}/audio`;
   if ($('#source-audio').getAttribute('src') !== audioUrl) $('#source-audio').src = audioUrl;
   $('#chord-cards').innerHTML = score.chords.map(chordCard).join('');
   $('#score-count').textContent = `${score.measures.length} 小节 · ${clock(score.duration)}`;
   $('#review-text').textContent = score.review_count ? `${score.review_count} 处和弦建议复核（橙色圆点）。点击和弦名称可修改；试听原音时，小节会跟随高亮。` : '点击和弦名称可修改指型。试听原音时，小节会跟随高亮；建议校对节奏和起拍。';
-  $$('[data-export]').forEach(link => { link.href = `/api/jobs/${state.id}/export/${link.dataset.export}`; link.setAttribute('download', ''); });
+  $$('[data-export]').forEach(link => {
+    const kind = link.dataset.export;
+    link.href = BROWSER_MODE ? window.StringspaceBrowser.exportURL(score, kind) : `/api/jobs/${state.id}/export/${kind}`;
+    link.setAttribute('download', `guitar-score.${kind === 'midi' ? 'mid' : kind}`);
+  });
   state.page = Math.min(state.page, Math.max(0, Math.ceil(score.measures.length / PAGE_SIZE) - 1));
   renderPage(); setView('result');
   localStorage.setItem('stringspace-job', state.id);
@@ -121,7 +131,7 @@ async function generate() {
   if (!state.file) return;
   const generation = ++state.generation;
   setBusy(true); setView('progress');
-  $('#progress-message').textContent = '正在上传音乐'; $('#progress-fill').style.width = '1%'; $('#progress-percent').textContent = '1%';
+  $('#progress-message').textContent = BROWSER_MODE ? '正在读取本机音乐' : '正在上传音乐'; $('#progress-fill').style.width = '1%'; $('#progress-percent').textContent = '1%';
   $('#workspace-state').textContent = '正在生成你的乐谱';
   try {
     const form = new FormData(); form.append('file', state.file); form.append('config', JSON.stringify(config)); form.append('title', $('#song-title').value);

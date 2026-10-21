@@ -1,6 +1,23 @@
 # 弦间 · Stringspace
 
-将音乐或视频文件转换成可编辑、可试听、可打印的吉他伴奏六线谱。中文网页界面，音频在运行应用的机器上分析，不需要 API Key 或订阅。
+将音乐或视频文件转换成可编辑、可试听、可打印的吉他伴奏六线谱。中文网页界面，不需要 API Key 或订阅。提供 **GitHub Pages 浏览器版** 和 **Python 本机版**。
+
+## GitHub Pages 网页版
+
+网站部署目标：`https://cnbright.github.io/guitar_song/`。
+
+网页版是完整静态应用：音频解码、和弦识别、伴奏编配、试听和文件导出都在浏览器中进行，不依赖 Python 服务，不上传用户音频。已完成作品存储在当前浏览器的 IndexedDB 中。支持浏览器能解码的格式，优先使用 MP3、WAV、M4A；提供的 MP4 已在 Chromium 中验证。不同设备、浏览器或清除网站数据后，不会保留原浏览器中的作品。
+
+网站源文件在 `static/`，通过以下命令生成可直接发布的 `docs/`：
+
+```bash
+python scripts/build_pages.py
+node --test tests/browser_engine.test.cjs
+```
+
+`docs/` 中只包含网页代码，无音频、测试样例、凭据或 Python 依赖。代码使用相对资源地址，可部署在 `/guitar_song/` 子目录。GitHub 仓库 Settings → Pages → Build and deployment，可选择 **Deploy from a branch → main → /docs**；若使用独立 `gh-pages` 分支，则选择 **gh-pages → /(root)**。保存后等待 Pages 部署完成。
+
+GitHub Pages 版本使用 JavaScript FFT chroma 和 Viterbi 和弦识别；Python 版使用 HPSS/CQT，二者结果可能不同。浏览器版在用户提供的《爱河》片段上估计 129.2 BPM、Ab 调、推荐变调夹 1 品，生成 79 小节；开头第 7 小节误识别为 Em，需手动改为 Am。未将软件的功能测试视为整曲准确率保证。两版均提供和弦修改与节拍调整。
 
 **本版完整实现弹唱伴奏。** 支持分解和弦、扫弦和变调夹。指弹独奏（旋律与低音同时演奏）尚未实现，界面已明确标注；分解和弦不是旋律指弹。
 
@@ -15,7 +32,7 @@
 - 全谱打印 / 浏览器另存 PDF；导出 MusicXML、MIDI、TXT、JSON。
 - 刷新后恢复最近作品，可删除作品音轨和分析文件。桌面和手机响应式布局。
 
-## 安装与运行
+## Python 本机版：安装与运行
 
 需要 **Python 3.12**（已测试 3.12.14）和 **FFmpeg / ffprobe**。浏览器建议使用近期版本的 Chrome、Edge 或 Firefox。
 
@@ -81,7 +98,9 @@ bash scripts/start.sh
 
 ## 识别方式与边界
 
-FFmpeg 提取 22,050 Hz 单声道音轨 → HPSS 减弱打击成分 → CQT chroma 表示和声 → 24 个大/小三和弦模板与 Viterbi 平滑 → 变调夹指型换算 → 固定右手织体编配。
+Python 版：FFmpeg 提取 22,050 Hz 单声道音轨 → HPSS 减弱打击成分 → CQT chroma 表示和声 → 24 个大/小三和弦模板与 Viterbi 平滑 → 变调夹指型换算 → 固定右手织体编配。
+
+浏览器版：Web Audio 解码 → Web Worker 内 FFT / 谱峰 chroma 与节拍估计 → 同样的 24 个和弦模板、指型和编配逻辑。无需 WebAssembly、跨域隔离或外部 CDN，页面加载后制谱不需要网络。浏览器版只保存当前浏览器中的作品；文件解析支持范围由浏览器决定。
 
 - 无需下载模型，也没有伪造的音乐识别 API。HPSS 不是人声或吉他分轨；混音中的人声和其他乐器仍会干扰结果。
 - 这是 **和弦识别 + 新伴奏编配**，不还原录音中的原始扫弦细节、滑音、击勾弦、特殊调弦或完整指弹。
@@ -94,6 +113,7 @@ FFmpeg 提取 22,050 Hz 单声道音轨 → HPSS 减弱打击成分 → CQT chro
 
 ```bash
 .venv/bin/python -m pytest -q
+node --test tests/browser_engine.test.cjs
 ```
 
 测试覆盖真实合成和弦音频识别、24 个和弦的变调夹音高一致性、两种演奏方式、半小节扫弦、休止、3/4 与尾部不完整小节、中文 MIDI、MusicXML 时值、无效音频、完整上传/编配/导出/删除 API。
@@ -114,6 +134,8 @@ app/arrangement.py  和弦识别、指型与音符编配
 app/exports.py      MIDI / MusicXML / TXT 导出
 app/main.py         异步任务与 HTTP API
 static/            无构建步骤的网页应用
+static/engine.js    浏览器音频分析、编配和导出引擎
+docs/              可直接部署到 GitHub Pages 的静态站点
 tests/             音频、乐理和 API 测试
 scripts/           安装、启动与浏览器检查
 .data/jobs/        本机作品数据（Git 忽略）

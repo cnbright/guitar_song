@@ -1,0 +1,23 @@
+"""Build a self-contained GitHub Pages site without Python runtime dependencies."""
+import argparse
+import shutil
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+ASSETS = ['index.html', 'style.css', 'app.js', 'favicon.svg', 'engine.js',
+          'audio-worker.js', 'browser-backend.js', 'site-config.js']
+
+
+def build(destination: Path):
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in ASSETS:
+        shutil.copyfile(ROOT / 'static' / name, destination / name)
+    (destination / 'site-config.js').write_text("window.STRINGSPACE_MODE='browser';\n", encoding='utf-8')
+    (destination / '.nojekyll').touch()
+    print(f'Built {len(ASSETS)} assets in {destination}')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--out', type=Path, default=ROOT / 'docs')
+    build(parser.parse_args().out)

@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8f4">
   <title>弦间 · 把喜欢的音乐，变成你的吉他谱</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./site-config.js" defer></script>
+  <script src="./engine.js" defer></script>
+  <script src="./browser-backend.js" defer></script>
+  <script src="./app.js" defer></script>
 </head>
 <body>
 <svg class="icon-defs" aria-hidden="true"><defs>
@@ -22,7 +25,7 @@
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
 </defs></svg>
 <header class="topbar">
-  <a class="brand" href="/" aria-label="弦间首页"><span class="brand-mark"><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>弦间</strong><span class="brand-en">STRINGSPACE</span></a>
+  <a class="brand" href="./" aria-label="弦间首页"><span class="brand-mark"><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>弦间</strong><span class="brand-en">STRINGSPACE</span></a>
   <nav><span class="nav-current">创作工作台</span><button class="text-button" id="help-button">使用指南 <span class="help-icon">?</span></button></nav>
 </header>
 <main class="shell">
@@ -30,7 +33,7 @@
     <div><div class="eyebrow"><span></span> YOUR MUSIC, YOUR WAY</div><h1>让喜欢的歌，落在你的指尖<span>。</span></h1><p>从一段音乐，到一份能弹的吉他谱。把时间留给练习，把编配交给弦间。</p></div>
     <div class="hero-art" aria-hidden="true"><div class="art-orbit"></div><div class="art-strings"><i></i><i></i><i></i><i></i><i></i><i></i></div><b class="art-note one">♪</b><b class="art-note two">♫</b><span class="art-tag">made for your fingers</span></div>
   </section>
-  <div class="workflow"><span class="active"><b>01</b> 导入音乐</span><i></i><span id="step-two"><b>02</b> 定制编配</span><i></i><span id="step-three"><b>03</b> 开始练习</span><small><span class="local-dot"></span> 本机处理 · 无需账号</small></div>
+  <div class="workflow"><span class="active"><b>01</b> 导入音乐</span><i></i><span id="step-two"><b>02</b> 定制编配</span><i></i><span id="step-three"><b>03</b> 开始练习</span><small><span class="local-dot"></span><span id="processing-location">本机处理 · 无需账号</span></small></div>
   <div class="studio">
     <aside class="settings">
       <section class="panel upload-panel">
