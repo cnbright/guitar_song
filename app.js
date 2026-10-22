@@ -5,16 +5,19 @@ const state = {file: null, id: null, score: null, pattern: 'arpeggio', page: 0, 
 const PAGE_SIZE = 12;
 const BROWSER_MODE = window.STRINGSPACE_MODE === 'browser';
 if (BROWSER_MODE) {
-  state.pattern = 'transcribe';
-  $('#generate span').textContent = '生成转录草稿';
+  state.pattern = 'arpeggio';
+  $('#generate span').textContent = '生成简化分解';
   $('.hero p').textContent = '把一段吉他录音，整理成可试听、可校对的六线谱。先核对短片段，再开始练习。';
-  $('.under-button').textContent = '识别实际音符与时间 · 生成待校对草稿';
+  $('.under-button').textContent = '跟随原音的节奏、和弦与低音 · 简化分解';
   $('[data-pattern="transcribe"]').hidden = false;
   $('#max-fret-field').hidden = false;
-  $$('[data-pattern]').forEach(button => {button.classList.toggle('selected',button.dataset.pattern === 'transcribe');button.setAttribute('aria-pressed',String(button.dataset.pattern === 'transcribe'));});
-  $('#pattern-explanation').textContent = '适合清晰的吉他独奏音轨。转录结果是需校对的草稿，可能漏音或多音；普通歌曲混音不保证可用。';
+  $$('[data-pattern]').forEach(button => {button.classList.toggle('selected',button.dataset.pattern === 'arpeggio');button.setAttribute('aria-pressed',String(button.dataset.pattern === 'arpeggio'));});
+  $('#pattern-explanation').textContent = '自动跟随原音拨弦疏密，避免把四次弹奏加密成八次；在和弦内选取简化音符。';
   $('#processing-location').textContent = '浏览器处理 · 音频不上传';
   $('.help-note').insertAdjacentHTML('afterend', '<p class="field-hint">网页版直接在浏览器内分析音乐，无需安装软件。可用格式取决于浏览器；优先使用 MP3、WAV 或 M4A。关闭页面会中断正在进行的分析，已完成作品保存在当前浏览器。</p>');
+}else{
+  $('#arpeggio-rhythm option[value="auto"]').textContent='每拍一次 · 本机版默认';
+  $('#pattern-explanation').textContent='本机版默认每拍一次分解；跟随原音节奏请使用 GitHub Pages 网页版。';
 }
 const esc = (value) => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clock = value => `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
@@ -57,13 +60,14 @@ function chooseFile(file) {
   $('#song-title').disabled = false;
   $('#song-title').value = file.name.replace(/\.[^.]+$/, '').slice(0, 120);
   if(BROWSER_MODE){
-    state.pattern='transcribe';
-    $$('[data-pattern]').forEach(button=>{const selected=button.dataset.pattern==='transcribe';button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));});
+    state.pattern='arpeggio';
+    $$('[data-pattern]').forEach(button=>{const selected=button.dataset.pattern==='arpeggio';button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));});
     $('#rhythm-field').hidden=true;
     $('#max-fret-field').hidden=false;
-    $('#pattern-explanation').textContent='适合清晰的吉他音轨。先试听短片段并校对；普通歌曲混音不保证可用。';
+    $('#pattern-explanation').textContent='自动跟随原音拨弦疏密，在和弦内选取简化音符；先对照原音试听。';
+    $('#arpeggio-rhythm-field').hidden=false;
   }
-  $('#generate span').textContent = BROWSER_MODE ? '生成转录草稿' : '生成我的吉他谱';
+  $('#generate span').textContent = '生成简化分解';
   $('#generate').disabled = false;
   $('#dirty-note').hidden = true; $('#capo-suggestions').hidden = true;
   $('#workspace-state').textContent = '音乐已就绪'; $('#step-two').classList.add('active'); $('#step-three').classList.remove('active');
@@ -80,18 +84,19 @@ $$('[data-pattern]').forEach(button => button.addEventListener('click', () => {
   state.pattern = button.dataset.pattern;
   $$('[data-pattern]').forEach(node => { node.classList.toggle('selected', node === button); node.setAttribute('aria-pressed', String(node === button)); });
   $('#rhythm-field').hidden = state.pattern !== 'strum'; changed();
-  $('#max-fret-field').hidden = state.pattern !== 'transcribe';
-  $('#pattern-explanation').textContent = state.pattern === 'transcribe' ? '保留识别出的实际音高与起音时间；仍是实验草稿，请先用短片段对照。' : '简化模式会改写原演奏节奏，不用于还原录音。';
+  $('#arpeggio-rhythm-field').hidden=state.pattern!=='arpeggio';
+  $('#max-fret-field').hidden = state.pattern === 'strum';
+  $('#pattern-explanation').textContent = state.pattern === 'transcribe' ? '保留识别出的实际音高与起音时间；仍是实验草稿，请先用短片段对照。' : (state.pattern==='arpeggio'?'自动跟随原音节奏，在和弦内选取简化音符；手动选择每拍一次或两次会使用固定节奏。':'扫弦模式使用选定的扫弦节奏。');
   if(!state.score)$('#generate span').textContent=state.pattern==='transcribe'?'生成转录草稿':'生成简化编配';
 }));
 $('#capo').addEventListener('input', () => { $('#capo-value').textContent = +$('#capo').value ? `第 ${$('#capo').value} 品` : '不使用'; changed(); });
-['rhythm', 'meter', 'bpm', 'offset', 'changes', 'max-fret'].forEach(id => $(`#${id}`).addEventListener('change', changed));
+['rhythm', 'meter', 'bpm', 'offset', 'changes', 'max-fret', 'arpeggio-rhythm'].forEach(id => $(`#${id}`).addEventListener('change', changed));
 
 function configFromControls() {
   const config = {capo: +$('#capo').value, pattern: state.pattern, rhythm: $('#rhythm').value,
     meter: +$('#meter').value, bpm: $('#bpm').value ? +$('#bpm').value : null,
     offset: $('#offset').value ? +$('#offset').value : null, changes: $('#changes').value,
-    max_fret:+$('#max-fret').value, overrides: state.score ? {...state.score.config.overrides} : {}};
+    max_fret:+$('#max-fret').value, arpeggio_rhythm:$('#arpeggio-rhythm').value, overrides: state.score ? {...state.score.config.overrides} : {}};
   for (const id of ['bpm', 'offset']) if (!$(`#${id}`).reportValidity()) throw new Error('请检查节拍设置中的数值。');
   if (state.score && ['meter', 'bpm', 'offset', 'changes'].some(key => config[key] !== state.score.config[key])) config.overrides = {};
   return config;
@@ -102,8 +107,10 @@ function syncControls(config) {
   ['capo', 'rhythm', 'meter', 'bpm', 'offset', 'changes'].forEach(id => $(`#${id}`).value = config[id] ?? '');
   $('#capo-value').textContent = config.capo ? `第 ${config.capo} 品` : '不使用';
   $('#rhythm-field').hidden = config.pattern !== 'strum';
-  $('#max-fret').value = config.max_fret??7;$('#max-fret-field').hidden = config.pattern !== 'transcribe';
-  $('#pattern-explanation').textContent = config.pattern === 'transcribe' ? '保留识别出的实际音高与起音时间；仍是实验草稿，请先用短片段对照。' : '简化模式会改写原演奏节奏，不用于还原录音。';
+  $('#arpeggio-rhythm-field').hidden=config.pattern!=='arpeggio';
+  $('#arpeggio-rhythm').value=config.arpeggio_rhythm??'auto';
+  $('#max-fret').value = config.max_fret??7;$('#max-fret-field').hidden = config.pattern === 'strum';
+  $('#pattern-explanation').textContent = config.pattern === 'transcribe' ? '保留识别出的实际音高与起音时间；仍是实验草稿，请先用短片段对照。' : (state.pattern==='arpeggio'?'自动跟随原音节奏，在和弦内选取简化音符；手动选择每拍一次或两次会使用固定节奏。':'扫弦模式使用选定的扫弦节奏。');
 }
 function exportAllowed(){return !BROWSER_MODE||state.score?.comparison?.status==='passed'||$('#draft-consent').checked;}
 function updateExportGate(){
@@ -122,7 +129,7 @@ function showComparison(score){
   if(!BROWSER_MODE)return;
   const report=score.comparison,passed=report?.status==='passed',overall=report?.overall;
   $('#draft-consent').checked=false;$('#draft-consent-row').hidden=passed;
-  $('#comparison-summary').textContent=overall?(passed?'达到当前自动门槛，仍需试听校对。':'未通过验收：不可当作原曲谱使用。'):'这份旧结果没有原音验收记录，请点击更新，重新分析原文件。';
+  $('#comparison-summary').textContent=overall?(passed?'达到当前自动门槛，仍需试听校对。':score.accompaniment?'简化分解与原音的声学对比未全部达标，请查看具体差异；本表不是人工音符准确率。':'未通过验收：不可当作原曲谱使用。'):'这份旧结果没有原音验收记录，请点击更新，重新分析原文件。';
   $('#comparison-metrics').innerHTML=overall?[
     ['原音 / 生成起音',`${overall.reference_attacks} / ${overall.generated_attacks}`],
     ['多弹 / 漏弹',`${overall.extra_attacks} / ${overall.missing_attacks}`],
@@ -155,19 +162,19 @@ function acceptScore(score) {
   $('#capo-suggestions').innerHTML = '试试更顺手的指型：<br>' + score.capo_suggestions.map(item => `<button data-capo="${item.capo}" title="常用开放和弦占比约 ${Math.round(item.easy_ratio * 100)}%">${item.capo ? `夹 ${item.capo} 品` : '不夹'}${item === score.capo_suggestions[0] ? ' · 推荐' : ''}</button>`).join('');
   $$('[data-capo]').forEach(button => button.addEventListener('click', () => { $('#capo').value = button.dataset.capo; $('#capo').dispatchEvent(new Event('input')); generate(); }));
   const comparisonPassed=score.comparison?.status==='passed';
-  $('#workspace-state').textContent = BROWSER_MODE?(comparisonPassed?'达到自动门槛，仍需校对':'未通过原音验收'):score.quality?'转录草稿已生成，请先试听校对':'简化编配已生成'; $('#step-three').classList.add('active');
+  $('#workspace-state').textContent = BROWSER_MODE?(comparisonPassed?'达到自动门槛，仍需校对':score.accompaniment?'简化分解已生成 · 声学对比待复核':'未通过原音验收'):score.quality?'转录草稿已生成，请先试听校对':'简化编配已生成'; $('#step-three').classList.add('active');
   $('#step-two').classList.add('active');
   $('#score-title').textContent = score.title;
   $('#score-meta').innerHTML = `<div><small>速度 · 估计</small><strong>${score.bpm} <i>BPM</i></strong></div><div><small>原调 · 估计</small><strong>${esc(score.key)}</strong></div><div><small>变调夹</small><strong>${score.config.capo ? score.config.capo + ' <i>品</i>' : '无'}</strong></div><div><small>出谱方式</small><strong><i>${patternName(score.config.pattern)} · ${score.config.meter}/4</i></strong></div>`;
-  $('#quality-banner').textContent = BROWSER_MODE?`${comparisonPassed?'达到当前自动检查门槛，仍需人工校对。':'未通过原音验收。以下是用于定位问题的草稿，不是可靠的原曲谱。'} ${score.quality?`保留 ${score.quality.retained_notes} 个音符，${score.quality.unmapped_notes} 个未映射；合并 ${score.quality.unsupported_retriggers??0} 个缺少该音高起音支持的重复音。`:'固定节奏的简化编配会改写原演奏。'}`:'这是固定节奏的简化编配，不能还原原伴奏。';
-  $('.success-tag').textContent = BROWSER_MODE?(comparisonPassed?'自动检查达标':'未通过验收'):'简化编配';
+  $('#quality-banner').textContent = BROWSER_MODE?`${comparisonPassed?'达到当前自动检查门槛，仍需人工校对。':'未通过原音验收。以下是用于定位问题的草稿，不是可靠的原曲谱。'} ${score.quality?`保留 ${score.quality.retained_notes} 个音符，${score.quality.unmapped_notes} 个未映射；合并 ${score.quality.unsupported_retriggers??0} 个缺少该音高起音支持的重复音。`:(score.accompaniment?`${score.accompaniment.mode==='audio-guided'?'跟随原音':'按固定疏密'}生成 ${score.accompaniment.attacks} 次拨弦，${score.accompaniment.inferred_attacks??0} 处按规则补齐需复核；未使用逐音转录模型。`:'使用手动指定的固定节奏编配。')}`:'这是固定节奏的简化编配，不能还原原伴奏。';
+  $('.success-tag').textContent = BROWSER_MODE?(comparisonPassed?'自动检查达标':score.accompaniment?'简化分解 · 待校对':'未通过验收'):'简化编配';
   const peak = Math.max(...score.waveform, 0.01);
   $('#waveform').innerHTML = score.waveform.filter((_, i) => i % 2 === 0).map(v => `<i style="height:${Math.max(3, v / peak * 38)}px"></i>`).join('');
   const audioUrl = BROWSER_MODE ? window.StringspaceBrowser.audioURL(state.id) : `/api/jobs/${state.id}/audio`;
   if ($('#source-audio').getAttribute('src') !== audioUrl) $('#source-audio').src = audioUrl;
   $('#chord-cards').innerHTML = score.chords.map(chordCard).join('');
   $('#score-count').textContent = `${score.measures.length} 小节 · ${clock(score.duration)}`;
-  $('#review-text').textContent = score.quality ? '检测到的音符仍可能有漏音、泛音误识别或不便弹的指法。请先用“原音对照”检查短片段；点和弦只修改标注，逐音编辑可导出到打谱软件。' : `${score.review_count} 处和弦建议复核。点击和弦名称可修改；固定节奏不代表原曲演奏。`;
+  $('#review-text').textContent = score.quality ? '检测到的音符仍可能有漏音、泛音误识别或不便弹的指法。请先用“原音对照”检查短片段；点和弦只修改标注，逐音编辑可导出到打谱软件。' : `${score.review_count} 处和弦建议复核。点击和弦可重新简化该处音符；${score.accompaniment?'分解节奏跟随原音，仍可能省略装饰音或弱音。':'当前使用固定节奏。'}`;
   $$('[data-export]').forEach(link => {
     const kind = link.dataset.export;
     link.dataset.downloadUrl = BROWSER_MODE ? window.StringspaceBrowser.exportURL(score, kind) : `/api/jobs/${state.id}/export/${kind}`;
@@ -257,6 +264,7 @@ function measureHTML(bar, print = false) {
   for(let i=0;i<slots;i++) svg += `<text x="${xpos(i/2)}" y="128" text-anchor="middle" fill="#acb69f" font-size="7">${i%2 ? '&' : 1+i/2}</text>`;
   bar.events.forEach(event => {
     const x = xpos(event.beat);
+    if(event.inferred)svg+=`<text x="${x}" y="14" text-anchor="middle" fill="#ad7e3c" font-size="10"><title>按规则补齐的弱起音，请对照原音校对</title>?</text>`;
     if (event.direction) svg += `<text x="${x}" y="14" text-anchor="middle" fill="#9eac8f" font-size="12">${event.direction === 'down' ? '↓' : '↑'}</text>`;
     // Each column is an eighth-note slot, with stems showing playable rhythm.
     svg += `<path d="M${x} 100V113" stroke="#9aa98b" stroke-width=".8"/>`;
@@ -265,7 +273,7 @@ function measureHTML(bar, print = false) {
   });
   if(!bar.events.length) svg += '<text x="140" y="65" text-anchor="middle" fill="#9ca88f" font-size="11">休止</text>';
   svg += '</svg>';
-  return `<article class="measure" data-measure="${bar.number}"><div class="measure-header"><span class="measure-number">${String(bar.number).padStart(2,'0')}</span>${bar.segments.map(segment => `<${print ? 'span' : 'button'} class="chord-button ${segment.edited ? 'edited' : segment.confidence < .55 && segment.sounding !== 'N' ? 'review' : ''}" data-segment="${segment.id}" title="${esc(segment.sounding)} · 点击校对">${segment.shape === 'N' ? '休止' : esc(segment.shape)}</${print ? 'span' : 'button'}>`).join('<span style="font-size:9px;color:#c2cbb9">→</span>')}<span class="measure-time">${clock(bar.start)}</span></div>${svg}</article>`;
+  return `<article class="measure" data-measure="${bar.number}"><div class="measure-header"><span class="measure-number">${String(bar.number).padStart(2,'0')}</span>${bar.segments.map(segment => `<${print ? 'span' : 'button'} class="chord-button ${segment.edited ? 'edited' : segment.confidence < .55 && segment.sounding !== 'N' ? 'review' : ''}" data-segment="${segment.id}" title="${esc(segment.sounding)} · 点击校对">${segment.shape === 'N' ? '休止' : esc(segment.display_shape??segment.shape)}</${print ? 'span' : 'button'}>`).join('<span style="font-size:9px;color:#c2cbb9">→</span>')}<span class="measure-time">${clock(bar.start)}</span></div>${svg}</article>`;
 }
 function renderPage() {
   if (!state.score) return;
@@ -293,7 +301,7 @@ async function editChord(id) {
   if(state.busy) return;
   if(state.dirty) return toast('请先更新编配，再修改和弦。');
   state.edit = state.score.measures.flatMap(bar => bar.segments).find(segment => segment.id === id);
-  $('#edit-description').textContent = `${clock(state.edit.start)} — ${clock(state.edit.end)} · 实际响音 ${state.edit.sounding} · 变调夹 ${state.score.config.capo} 品${state.score.quality ? '。转录模式只修改和弦标注，不改写音符。' : ''}`;
+  $('#edit-description').textContent = `${clock(state.edit.start)} — ${clock(state.edit.end)} · 实际响音 ${state.edit.display_sounding??state.edit.sounding} · 变调夹 ${state.score.config.capo} 品${state.score.quality ? '。转录模式只修改和弦标注，不改写音符。' : ''}`;
   $('#edit-chord').innerHTML = state.chords.map(chord => `<option value="${esc(chord)}">${chord === 'N' ? '休止 / 无和弦' : esc(chord)}</option>`).join('');
   $('#edit-chord').value = state.edit.shape;
   $('#chord-dialog').showModal();
@@ -377,7 +385,7 @@ $('#ab-original').addEventListener('click',async()=>{
 $('#print-button').addEventListener('click', () => {
   if(!state.score||!exportAllowed()) return;
   const s=state.score;
-  $('#print-score').innerHTML=`<h1>${esc(s.title)}${BROWSER_MODE&&s.comparison?.status!=='passed'?' · 未通过验收草稿':''}</h1><p>${s.bpm} BPM · ${s.config.meter}/4 · 变调夹 ${s.config.capo} 品 · ${patternName(s.config.pattern)} · 和弦名为指型，数字相对变调夹</p><p>${s.quality?'逐音转录草稿，可能漏音、多音或选错弦位，请逐段校对。':'固定节奏的简化编配，不代表原伴奏。'} 起拍：${s.offset.toFixed(3)} 秒。</p><div class="chord-cards">${s.chords.map(chordCard).join('')}</div><div class="tab-grid">${s.measures.map(bar=>measureHTML(bar,true)).join('')}</div>`;
+  $('#print-score').innerHTML=`<h1>${esc(s.title)}${BROWSER_MODE&&s.comparison?.status!=='passed'?' · 未通过验收草稿':''}</h1><p>${s.bpm} BPM · ${s.config.meter}/4 · 变调夹 ${s.config.capo} 品 · ${patternName(s.config.pattern)} · 和弦名为指型，数字相对变调夹</p><p>${s.quality?'逐音转录草稿，可能漏音、多音或选错弦位，请逐段校对。':(s.accompaniment?'跟随原音节奏与低音的简化分解，装饰音可能省略。':'固定节奏的简化编配。')} 起拍：${s.offset.toFixed(3)} 秒。</p><div class="chord-cards">${s.chords.map(chordCard).join('')}</div><div class="tab-grid">${s.measures.map(bar=>measureHTML(bar,true)).join('')}</div>`;
   window.print();
 });
 $('#help-button').addEventListener('click', () => $('#help-dialog').showModal());
