@@ -15,6 +15,7 @@ def main():
     parser.add_argument('--file', type=Path, required=True)
     parser.add_argument('--base', default='http://127.0.0.1:8080/docs/')
     parser.add_argument('--browser')
+    parser.add_argument('--capo',type=int,default=0)
     args = parser.parse_args()
     output = Path('artifacts/pages-check')
     output.mkdir(parents=True, exist_ok=True)
@@ -35,9 +36,9 @@ def main():
         page.wait_for_function("!document.querySelector('#result-state').hidden || !document.querySelector('#error-state').hidden", timeout=120000)
         assert page.locator('#error-state').is_hidden(), page.locator('#error-message').inner_text()
         page.wait_for_function('!state.busy')
-        page.locator('#capo').evaluate("node=>{node.value=1;node.dispatchEvent(new Event('input'));}")
+        page.locator('#capo').evaluate("(node,value)=>{node.value=value;node.dispatchEvent(new Event('input'));}",args.capo)
         page.locator('#generate').click()
-        page.wait_for_function('!state.busy && state.score.config.capo === 1')
+        page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
         page.locator('#play-score').click()
         page.wait_for_timeout(800)
@@ -45,7 +46,7 @@ def main():
         page.locator('#play-score').click()
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')
-        assert page.evaluate('state.score.config.capo') == 1
+        assert page.evaluate('state.score.config.capo') == args.capo
         page.locator('#source-audio').evaluate('audio=>audio.play()')
         page.wait_for_timeout(1000)
         assert page.locator('#source-audio').evaluate('audio=>audio.currentTime>0')
@@ -66,6 +67,10 @@ def main():
         page.locator('#generate').click()
         page.wait_for_function("!state.busy && state.score.config.pattern === 'strum'")
         assert page.evaluate('state.score.measures[0].events[0].notes.length') > 1
+        if score.get('quality'):
+            page.locator('[data-pattern="transcribe"]').click()
+            page.locator('#generate').click()
+            page.wait_for_function("!state.busy && state.score.config.pattern === 'transcribe'")
         page.evaluate('window.print=()=>{}')
         page.locator('#print-button').click()
         page.pdf(path=str(output / 'score.pdf'), format='A4', print_background=True)
@@ -80,6 +85,7 @@ def main():
         page.wait_for_function("!document.querySelector('#empty-state').hidden")
         assert not page.evaluate("localStorage.getItem('stringspace-job')")
         report = {'passed':True,'bpm':score['bpm'],'measures':len(score['measures']),
+                  'quality':score.get('quality'),
                   'api_requests':0,'browser_errors':errors,'checks':['decode','chord_analysis','capo',
                   'synthesis','original_audio','indexeddb_restore','edit_reset','strum','exports','pdf','mobile','delete']}
         (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))

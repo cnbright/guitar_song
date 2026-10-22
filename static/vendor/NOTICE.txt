@@ -1,0 +1,3 @@
+Spotify Basic Pitch: Copyright 2022 Spotify AB, Apache-2.0.
+TensorFlow.js: Copyright Google LLC, Apache-2.0.
+This application bundles unmodified pretrained model weights and a browser runtime. See licenses/ and transcriber.js.LEGAL.txt.

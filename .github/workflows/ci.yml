@@ -22,6 +22,8 @@ jobs:
           sudo apt-get install -y ffmpeg
           python -m pip install -r requirements.lock
           python -m pytest -q
-          node --test tests/browser_engine.test.cjs
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build:model
           python scripts/build_pages.py
           git diff --exit-code -- docs

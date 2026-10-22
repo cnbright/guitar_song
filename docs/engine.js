@@ -19,10 +19,11 @@
   function transpose(chord,steps) { if(chord==='N')return chord; const [r,m]=parse(chord); return PITCHES[(r+steps+120)%12]+(m?'m':''); }
   function voicing(chord) { if(chord==='N')return Array(6).fill(null); const [r,m]=parse(chord); return [...(m?MINOR:MAJOR)[r]].map(f=>f==='x'?null:+f); }
   function configOptions(options={}) {
-    const c={capo:0,pattern:'arpeggio',rhythm:'folk',meter:4,bpm:null,offset:null,changes:'bar',overrides:{},...options};
+    const c={capo:0,pattern:'arpeggio',rhythm:'folk',meter:4,bpm:null,offset:null,changes:'bar',overrides:{},max_fret:7,...options};
+    if(!Number.isInteger(c.max_fret)||c.max_fret<1||c.max_fret>24)throw new Error('最高品位应在 1–24 品之间。');
     if(!Number.isInteger(c.capo)||c.capo<0||c.capo>12) throw new Error('变调夹应为 0–12 品。');
     if(![3,4].includes(c.meter)) throw new Error('请选择 3/4 或 4/4 拍。');
-    if(!['arpeggio','strum'].includes(c.pattern)||!['folk','steady'].includes(c.rhythm)||!['bar','half'].includes(c.changes)) throw new Error('演奏配置不正确。');
+    if(!['arpeggio','strum','transcribe'].includes(c.pattern)||!['folk','steady'].includes(c.rhythm)||!['bar','half'].includes(c.changes)) throw new Error('演奏配置不正确。');
     if(c.bpm!==null&&(!Number.isFinite(c.bpm)||c.bpm<40||c.bpm>220)) throw new Error('速度应为 40–220 BPM。');
     if(c.offset!==null&&(!Number.isFinite(c.offset)||c.offset<0||c.offset>30)) throw new Error('起拍时间应为 0–30 秒。');
     if(!c.overrides||typeof c.overrides!=='object'||Array.isArray(c.overrides)) throw new Error('和弦修改格式不正确。');
@@ -128,7 +129,35 @@
     for(let i=0;i<240;i++){
       let peak=0;for(let j=Math.floor(i*samples.length/240);j<Math.floor((i+1)*samples.length/240);j++)peak=Math.max(peak,Math.abs(samples[j]));waveform.push(peak);
     }
-    return {meta:{duration:round(duration),...tempo,sample_rate:sampleRate,hop,waveform,algorithm:'browser-fft-chroma-viterbi-v1'},chroma,rms};
+    return {meta:{duration:round(duration),...tempo,sample_rate:sampleRate,hop,waveform,algorithm:'browser-fft-chroma-viterbi-v1'},chroma,rms,attacks:detectAttacks(samples,sampleRate)};
+  }
+
+  function detectAttacks(samples,sampleRate=22050) {
+    const hop=256,size=2048,fft=new FFT(size),count=Math.ceil(samples.length/hop),flux=new Float32Array(count),previous=new Float32Array(size/2);
+    for(let frame=0;frame<count;frame++){
+      fft.transform(samples,frame*hop);let sum=0;
+      for(let bin=4;bin<Math.min(size/2,Math.ceil(5000*size/sampleRate));bin++){
+        const value=Math.log1p(10*Math.hypot(fft.real[bin],fft.imag[bin]));sum+=Math.max(0,value-previous[bin]);previous[bin]=value;
+      }
+      flux[frame]=sum;
+    }
+    let maximum=0;for(const value of flux)maximum=Math.max(maximum,value);
+    const candidates=[];
+    for(let i=3;i<count-3;i++){
+      if(flux[i]<maximum*.018)continue;
+      if(flux[i]<Math.max(...flux.subarray(i-2,i+3)))continue;
+      const window=flux.subarray(Math.max(0,i-25),Math.min(count,i+26));
+      const baseline=median(window);
+      if(flux[i]<Math.max(baseline*1.8,maximum*.035))continue;
+      candidates.push({time:round(i*hop/sampleRate),strength:round(flux[i]/maximum)});
+    }
+    const result=[];
+    for(const candidate of candidates){
+      const last=result.at(-1);
+      if(last && candidate.time-last.time<.09){if(candidate.strength>last.strength)result[result.length-1]=candidate;}
+      else result.push(candidate);
+    }
+    return result;
   }
 
   const TEMPLATES=CHORDS.map(chord=>{
@@ -194,6 +223,10 @@
     return result;
   }
   function arrange(features,options,title) {
+    if(options?.pattern==='transcribe'){
+      if(!root.StringspaceTranscription)throw new Error('逐音转录组件未加载，请刷新页面。');
+      return root.StringspaceTranscription.arrange(features,configOptions(options),title);
+    }
     const config=configOptions(options),meta=features.meta,bpm=config.bpm??meta.bpm,offset=config.offset??meta.offset;
     if(offset>=meta.duration-.05)throw new Error('起拍时间后没有足够的音乐，请提前起拍时间。');
     const beatSeconds=60/bpm,perBar=config.changes==='half'?2:1,step=config.meter*beatSeconds/perBar;
@@ -228,6 +261,7 @@
       algorithm:meta.algorithm,warnings:['自动和弦识别后的伴奏编配，不是原录音逐音还原。','速度和起拍是估计值，请结合原音校对。','支持大、小三和弦，复杂和弦和转位会被简化。']};
   }
   function midiBytes(score) {
+    if(score.source_notes)return root.StringspaceTranscription.midiBytes(score);
     const bytes=[],events=[];
     const variable=n=>{const out=[n&127];while(n>>=7)out.unshift((n&127)|128);return out;};
     const text=new TextEncoder().encode(score.title);bytes.push(0,255,3,...variable(text.length),...text);
@@ -242,6 +276,7 @@
     return new Uint8Array([77,84,104,100,0,0,0,6,0,0,0,1,1,224,77,84,114,107,(length>>>24)&255,(length>>>16)&255,(length>>>8)&255,length&255,...bytes]);
   }
   function musicxml(score) {
+    if(score.source_notes)return root.StringspaceTranscription.musicxml(score);
     const e=escapeXML,capo=score.config.capo,meter=score.config.meter;
     let xml=`<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><work><work-title>${e(score.title)}</work-title></work><part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list><part id="P1">`;
     const rest=n=>n>0?`<note><rest/><duration>${n}</duration></note>`:'';
@@ -268,6 +303,7 @@
     return xml+'</part></score-partwise>';
   }
   function textTab(score) {
+    if(score.source_notes)return root.StringspaceTranscription.textTab(score);
     const lines=[score.title,`${score.bpm} BPM | ${score.config.meter}/4 | Capo ${score.config.capo}`,'和弦名为指型，数字相对变调夹。自动伴奏编配，请对照原音校对。',''];
     for(const bar of score.measures){
       lines.push(`第 ${bar.number} 小节 (${bar.start.toFixed(2)}s)  `+bar.segments.map(s=>s.shape).join(' → '));
@@ -277,7 +313,7 @@
     }
     return lines.join('\n');
   }
-  const engine={CHORDS,OPEN,parse,transpose,voicing,configOptions,analyze,arrange,noteEvents,midiBytes,musicxml,textTab};
+  const engine={CHORDS,OPEN,parse,transpose,voicing,configOptions,analyze,detectAttacks,recognize,arrange,noteEvents,midiBytes,musicxml,textTab};
   root.StringspaceEngine=engine;
   if(typeof module!=='undefined'&&module.exports)module.exports=engine;
 })(globalThis);
