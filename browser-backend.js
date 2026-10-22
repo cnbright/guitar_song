@@ -68,18 +68,18 @@
       }
       const sampleRate=decoded.sampleRate;decoded=null;await context.close();context=null;
       job.features=await new Promise((resolve,reject)=>{
-        worker=new Worker(new URL('./audio-worker.js',document.baseURI));
+        worker=new Worker(new URL('./audio-worker.js?v=2',document.baseURI));
         worker.onmessage=({data})=>{
-          if(data.type==='progress'){job.progress=data.progress;job.message=data.message;}
+          if(data.type==='progress'){job.progress=job.config.pattern==='transcribe' && !data.message.includes('模型') && data.progress<80 && !data.message.includes('实际音符') ? Math.round(data.progress*.3) : data.progress;job.message=data.message;}
           else if(data.type==='complete')resolve(data.features);
           else if(data.type==='error')reject(new Error(data.message));
         };
         worker.onerror=()=>reject(new Error('音频分析线程无法启动，请刷新页面并尝试较短的音频。'));
-        worker.postMessage({samples,sampleRate},[samples.buffer]);
+        worker.postMessage({samples,sampleRate,transcribe:job.config.pattern==='transcribe'},[samples.buffer]);
       });
       job.progress=90;job.message='正在编配指型和六线谱';
       job.score=engine.arrange(job.features,job.config,job.title);
-      job.status='completed';job.progress=100;job.message='乐谱已生成，音频保存在当前浏览器';
+      job.status='completed';job.progress=100;job.message=job.config.pattern==='transcribe'?'转录草稿已生成，请先试听校对':'简化伴奏已生成，不代表原演奏';
       await persist(job);
     }catch(error){
       job.status='failed';job.progress=0;job.message=error.message||'分析遇到问题，请尝试其他文件。';
@@ -110,7 +110,15 @@
     }
     if(match[2]==='arrange'&&options.method==='POST'){
       if(job.status!=='completed')throw new Error('乐谱尚未生成完成。');
-      const config=engine.configOptions(JSON.parse(options.body)),score=engine.arrange(job.features,config,job.title);
+      const config=engine.configOptions(JSON.parse(options.body));
+      if(config.pattern==='transcribe'&&!job.features.transcription){
+        if(active)throw new Error('还有一段音乐正在分析，请稍候。');
+        const updated={...job,config,status:'queued',progress:1,message:'正在重新识别原音'};
+        jobs.set(job.id,updated);active=true;await analyzeJob(updated);
+        if(updated.status==='failed'){jobs.set(job.id,job);await persist(job);throw new Error(updated.message);}
+        return updated.score;
+      }
+      const score=engine.arrange(job.features,config,job.title);
       const updated={...job,config,score};await persist(updated);jobs.set(job.id,updated);return score;
     }
     return {id:job.id,status:job.status,progress:job.progress,message:job.message,...(job.status==='completed'?{score:job.score}:{})};

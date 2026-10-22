@@ -6,11 +6,12 @@
   <meta name="theme-color" content="#f7f8f4">
   <title>弦间 · 把喜欢的音乐，变成你的吉他谱</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css">
-  <script src="./site-config.js" defer></script>
-  <script src="./engine.js" defer></script>
-  <script src="./browser-backend.js" defer></script>
-  <script src="./app.js" defer></script>
+  <link rel="stylesheet" href="./style.css?v=2">
+  <script src="./site-config.js?v=2" defer></script>
+  <script src="./engine.js?v=2" defer></script>
+  <script src="./transcription.js?v=2" defer></script>
+  <script src="./browser-backend.js?v=2" defer></script>
+  <script src="./app.js?v=2" defer></script>
 </head>
 <body>
 <svg class="icon-defs" aria-hidden="true"><defs>
@@ -52,9 +53,11 @@
         <div class="mode-select"><button class="selected" type="button">弹唱伴奏 <span>当前版本</span></button><button disabled title="指弹独奏将在后续版本提供">指弹独奏 <span>规划中</span></button></div>
         <label class="field-label space-top">右手演奏</label>
         <div class="pattern-select" role="group" aria-label="右手演奏方式">
-          <button class="selected" data-pattern="arpeggio" aria-pressed="true"><span class="pattern-art">· · · · ·</span><strong>分解和弦</strong><small>一根一根拨响</small></button>
-          <button data-pattern="strum" aria-pressed="false"><span class="pattern-art arrows">↓ ↓ ↑ ↑</span><strong>扫弦伴奏</strong><small>让节奏更饱满</small></button>
+          <button data-pattern="transcribe" class="source-pattern" aria-pressed="false" hidden><strong>原伴奏转录 · 实验</strong><small>识别录音中的音符与实际节奏</small></button>
+          <button class="selected" data-pattern="arpeggio" aria-pressed="true"><span class="pattern-art">· · · · ·</span><strong>简化分解</strong><small>重新编配固定节奏</small></button>
+          <button data-pattern="strum" aria-pressed="false"><span class="pattern-art arrows">↓ ↓ ↑ ↑</span><strong>简化扫弦</strong><small>重新编配固定节奏</small></button>
         </div>
+        <p id="pattern-explanation" class="field-hint">简化模式会改写原演奏节奏，不用于还原录音。</p>
         <label id="rhythm-field" class="field space-top" hidden>扫弦节奏<select id="rhythm"><option value="folk">民谣律动 · 下 下上 空上 下上</option><option value="steady">简单下扫 · 每拍一次</option></select></label>
         <div class="capo-label"><label for="capo" class="field-label">变调夹位置</label><span id="capo-value">不使用</span></div>
         <input type="range" id="capo" min="0" max="12" value="0" step="1" aria-label="变调夹品位">
@@ -62,6 +65,7 @@
         <p class="field-hint">保持原曲音高，自动换算左手和弦指型。</p>
         <div id="capo-suggestions" class="capo-suggestions" hidden></div>
         <details class="advanced"><summary>节拍与和弦设置 <span>＋</span></summary><div class="advanced-inner">
+          <label id="max-fret-field" class="field" hidden>转录指法范围<select id="max-fret"><option value="5">0–5 品 · 省略较高音符</option><option value="7" selected>0–7 品 · 新手范围</option><option value="12">0–12 品 · 更多高音</option><option value="20">0–20 品 · 完整范围</option></select></label>
           <div class="field-row"><label class="field">速度 BPM<input id="bpm" type="number" min="40" max="220" step="0.1" placeholder="自动识别"></label><label class="field">拍号<select id="meter"><option value="4">4/4 拍</option><option value="3">3/4 拍</option></select></label></div>
           <label class="field">第一个小节起点（秒）<input id="offset" type="number" min="0" max="30" step="0.01" placeholder="自动估计"></label>
           <label class="field">和弦变化频率<select id="changes"><option value="bar">每小节一个和弦</option><option value="half">每半小节一个和弦</option></select></label>
@@ -84,6 +88,7 @@
       <div id="progress-state" class="progress-state panel" hidden aria-live="polite"><div class="processing-animation"><i></i><i></i><i></i><i></i><i></i></div><h3 id="progress-message">正在聆听你的音乐</h3><p>音乐正在本机分析，首次运行可能稍慢，请保留此页面。</p><div class="progress-track"><div id="progress-fill"></div></div><span id="progress-percent">0%</span></div>
       <div id="error-state" class="error-state panel" hidden role="alert"><span>!</span><h3>这次没有完成制谱</h3><p id="error-message"></p><button id="retry-button" class="secondary">重新尝试</button></div>
       <div id="result-state" hidden>
+        <div id="quality-banner" class="quality-banner" role="status"></div>
         <div class="result-summary panel"><div class="result-heading"><div><span class="result-eyebrow">YOUR GUITAR ARRANGEMENT</span><h2 id="score-title"></h2></div><span class="success-tag">已生成</span></div><div id="score-meta" class="score-meta"></div><div id="waveform" class="waveform" aria-hidden="true"></div><div class="audio-row"><span>原音对照</span><audio id="source-audio" controls preload="metadata"></audio></div></div>
         <div class="chord-section"><div class="small-heading"><h3>用到的和弦</h3><span>指型名称 · 数字相对于变调夹</span></div><div id="chord-cards" class="chord-cards"></div></div>
         <div class="score-toolbar"><div><h3>六线谱</h3><span id="score-count"></span></div><div class="toolbar-actions"><button id="print-button" class="secondary"><svg><use href="#i-print"/></svg>打印 / PDF</button><details id="export-menu"><summary class="secondary"><svg><use href="#i-download"/></svg>导出 <span>⌄</span></summary><div class="export-options"><a data-export="musicxml">MusicXML · 可编辑乐谱</a><a data-export="midi">MIDI · 伴奏音符</a><a data-export="txt">TXT · 文本六线谱</a><a data-export="json">JSON · 编配数据</a></div></details></div></div>
@@ -91,13 +96,13 @@
         <div class="tab-legend"><span>① e 为最细弦，⑥ E 为最粗弦</span><span>数字 = 按弦品位</span><span>↓ 下扫　↑ 上扫</span></div>
         <div id="tab-grid" class="tab-grid"></div>
         <div class="pagination"><button id="previous-page" class="secondary">← 上一页</button><span id="page-label"></span><button id="next-page" class="secondary">下一页 →</button></div>
-        <div class="playback-panel panel"><button id="play-score" class="play-button" aria-label="试听生成的伴奏"><svg><use href="#i-play"/></svg></button><div class="playback-description"><strong id="playback-label">试听编配</strong><small>合成吉他音色 · 从当前页开始</small></div><label class="speed-label">练习速度<select id="playback-speed"><option value="0.5">0.5 ×</option><option value="0.75">0.75 ×</option><option value="1" selected>1.0 ×</option><option value="1.25">1.25 ×</option></select></label><button id="delete-button" class="text-button delete-button">删除此作品</button></div>
-        <p class="score-disclaimer">自动生成的是伴奏编配，非原曲逐音还原。复杂和弦、拍号与节奏请结合试听校对。</p>
+        <div class="playback-panel panel"><button id="play-score" class="play-button" aria-label="试听生成的伴奏"><svg><use href="#i-play"/></svg></button><div class="playback-description"><strong id="playback-label">试听编配</strong><small>合成音色 · 请与原音对照校对</small></div><button id="compare-source" class="secondary">原音对照</button><label class="speed-label">练习速度<select id="playback-speed"><option value="0.5">0.5 ×</option><option value="0.75">0.75 ×</option><option value="1" selected>1.0 ×</option><option value="1.25">1.25 ×</option></select></label><button id="delete-button" class="text-button delete-button">删除此作品</button></div>
+        <p class="score-disclaimer">逐音转录仍可能漏音、多音或选错弦位；简化编配会改写原演奏节奏。请先用短片段对照原音，校对后再练习。</p>
       </div>
       <div class="workspace-footer"><span>六根弦，无限可能。</span><span>DESIGNED FOR YOUR NEXT SONG</span></div>
     </section>
   </div>
-  <footer class="site-footer"><span>弦间 <span class="footer-divider">/</span> 让每一份喜欢，都有谱可循。</span><span>伴奏制谱 v1.0</span></footer>
+  <footer class="site-footer"><span>弦间 <span class="footer-divider">/</span> 让每一份喜欢，都有谱可循。</span><span>伴奏转录实验版 v2.0</span></footer>
 </main>
 <dialog id="chord-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><span class="result-eyebrow">MAKE IT YOURS</span><h2>校对这个和弦</h2><p id="edit-description"></p><label class="field">选择左手指型<select id="edit-chord"></select></label><p class="field-hint">保存后会同步更新六线谱、试听和导出内容。</p><button id="save-chord" class="primary">应用修改</button><button id="reset-chord" class="text-button reset-chord">恢复自动识别</button></dialog>
 <dialog id="help-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><span class="result-eyebrow">A QUICK START</span><h2>三步，开始你的下一首歌</h2><ol><li><strong>导入音乐</strong><p>选择音乐文件或带有音轨的视频。清晰的吉他伴奏比复杂的乐队混音更容易识别。</p></li><li><strong>定制编配</strong><p>选择分解和弦或扫弦，设置变调夹。生成后可参考推荐品位，让左手更轻松。</p></li><li><strong>试听、校对、练习</strong><p>点击谱面上的和弦即可修改。橙色圆点表示建议复核。用原音对照节拍，再打印或导出到打谱软件。</p></li></ol><div class="help-note">当前版本生成弹唱伴奏，支持大、小三和弦。指弹独奏（旋律 + 低音）尚未实现。分解和弦是伴奏织体，不等同于指弹独奏。</div><p class="field-hint">文件仅在运行此应用的机器上分析，不发送至第三方服务。作品保存在本机，点击“删除此作品”可移除该作品音轨与分析数据。</p></dialog>
