@@ -45,10 +45,25 @@
     if(exportURLs.has(kind))URL.revokeObjectURL(exportURLs.get(kind));
     const formats={musicxml:()=>[engine.musicxml(score),'application/vnd.recordare.musicxml+xml'],
       midi:()=>[engine.midiBytes(score),'audio/midi'],txt:()=>[engine.textTab(score),'text/plain;charset=utf-8'],
-      json:()=>[JSON.stringify(score,null,2),'application/json']};
+      json:()=>[JSON.stringify(score,null,2),'application/json'],
+      report:()=>[JSON.stringify(score.comparison||{status:'unverified'},null,2),'application/json'],
+      wav:()=>[root.StringspaceVerification.wav(root.StringspaceVerification.render(score)),'audio/wav']};
     if(!formats[kind])throw new Error('不支持的导出格式。');
     const [data,type]=formats[kind](),url=URL.createObjectURL(new Blob([data],{type}));
     exportURLs.set(kind,url);return url;
+  }
+  async function verifyScore(job,score){
+    if(!job.features.acoustic){score.comparison={status:'unverified'};return score;}
+    job.progress=92;job.message='正在把实际合成音与原音逐段对比';
+    const worker=new Worker(new URL('./audio-worker.js?v=3',document.baseURI));
+    try{
+      score.comparison=await new Promise((resolve,reject)=>{
+        worker.onmessage=({data})=>{if(data.type==='verified')resolve(data.comparison);else if(data.type==='error')reject(new Error(data.message));};
+        worker.onerror=()=>reject(new Error('声学验收未完成，请重新生成。'));
+        worker.postMessage({kind:'verify',score,reference:job.features.acoustic});
+      });
+    }finally{worker.terminate();}
+    return score;
   }
   async function analyzeJob(job){
     let context,worker;
@@ -68,7 +83,7 @@
       }
       const sampleRate=decoded.sampleRate;decoded=null;await context.close();context=null;
       job.features=await new Promise((resolve,reject)=>{
-        worker=new Worker(new URL('./audio-worker.js?v=2',document.baseURI));
+        worker=new Worker(new URL('./audio-worker.js?v=3',document.baseURI));
         worker.onmessage=({data})=>{
           if(data.type==='progress'){job.progress=job.config.pattern==='transcribe' && !data.message.includes('模型') && data.progress<80 && !data.message.includes('实际音符') ? Math.round(data.progress*.3) : data.progress;job.message=data.message;}
           else if(data.type==='complete')resolve(data.features);
@@ -78,8 +93,8 @@
         worker.postMessage({samples,sampleRate,transcribe:job.config.pattern==='transcribe'},[samples.buffer]);
       });
       job.progress=90;job.message='正在编配指型和六线谱';
-      job.score=engine.arrange(job.features,job.config,job.title);
-      job.status='completed';job.progress=100;job.message=job.config.pattern==='transcribe'?'转录草稿已生成，请先试听校对':'简化伴奏已生成，不代表原演奏';
+      job.score=await verifyScore(job,engine.arrange(job.features,job.config,job.title));
+      job.status='completed';job.progress=100;job.message=job.score.comparison.status==='passed'?'达到自动检查门槛，仍需试听校对':'与原音差异超出门槛，仅保留不合格草稿';
       await persist(job);
     }catch(error){
       job.status='failed';job.progress=0;job.message=error.message||'分析遇到问题，请尝试其他文件。';
@@ -111,14 +126,14 @@
     if(match[2]==='arrange'&&options.method==='POST'){
       if(job.status!=='completed')throw new Error('乐谱尚未生成完成。');
       const config=engine.configOptions(JSON.parse(options.body));
-      if(config.pattern==='transcribe'&&!job.features.transcription){
+      if(!job.features.acoustic||(config.pattern==='transcribe'&&!job.features.transcription)){
         if(active)throw new Error('还有一段音乐正在分析，请稍候。');
         const updated={...job,config,status:'queued',progress:1,message:'正在重新识别原音'};
         jobs.set(job.id,updated);active=true;await analyzeJob(updated);
         if(updated.status==='failed'){jobs.set(job.id,job);await persist(job);throw new Error(updated.message);}
         return updated.score;
       }
-      const score=engine.arrange(job.features,config,job.title);
+      const score=await verifyScore(job,engine.arrange(job.features,config,job.title));
       const updated={...job,config,score};await persist(updated);jobs.set(job.id,updated);return score;
     }
     return {id:job.id,status:job.status,progress:job.progress,message:job.message,...(job.status==='completed'?{score:job.score}:{})};

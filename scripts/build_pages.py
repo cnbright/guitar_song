@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-ASSETS = ['index.html', 'style.css', 'app.js', 'favicon.svg', 'engine.js', 'transcription.js',
+ASSETS = ['index.html', 'style.css', 'app.js', 'favicon.svg', 'engine.js', 'transcription.js', 'verification.js',
           'audio-worker.js', 'browser-backend.js', 'site-config.js']
 
 

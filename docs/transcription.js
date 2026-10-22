@@ -3,7 +3,7 @@
   'use strict';
   const E=root.StringspaceEngine,round=n=>Math.round(n*1000000)/1000000;
   const median=a=>{const s=[...a].sort((x,y)=>x-y);return s[Math.floor(s.length/2)]||0;};
-  function cleanNotes(raw,attacks,duration){
+  function cleanNotes(raw,attacks,duration,reference){
     const grouped=new Map(),output=[];
     for(const source of raw){
       if(!Number.isFinite(source.time)||!Number.isFinite(source.duration)||!Number.isInteger(source.midi)||source.amplitude<.22||source.duration<.06)continue;
@@ -11,11 +11,15 @@
       if(note.time>=duration||note.duration<=0)continue;
       if(!grouped.has(note.midi))grouped.set(note.midi,[]);grouped.get(note.midi).push(note);
     }
-    let merged=0;
+    let merged=0,unsupportedRetriggers=0;
     for(const notes of grouped.values()){
       notes.sort((a,b)=>a.time-b.time);let last;
       for(const note of notes){
-        const attack=attacks.some(a=>Math.abs(a.time-note.time)<.055);
+        let attack=attacks.some(a=>Math.abs(a.time-note.time)<.055);
+        if(attack&&last&&note.amplitude<.6&&note.time<=last.time+last.duration+.045&&reference){
+          const rise=root.StringspaceVerification.pitchRise(reference,note.midi,note.time);
+          if(rise!==null&&rise<.85){attack=false;unsupportedRetriggers++;}
+        }
         if(last && note.time<=last.time+last.duration+.045 && !attack){
           last.duration=Math.max(last.duration,note.time+note.duration-last.time);last.amplitude=Math.max(last.amplitude,note.amplitude);merged++;
         }else{
@@ -24,7 +28,7 @@
         }
       }
     }
-    return {notes:output.sort((a,b)=>a.time-b.time||a.midi-b.midi),merged};
+    return {notes:output.sort((a,b)=>a.time-b.time||a.midi-b.midi),merged,unsupportedRetriggers};
   }
   function grid(features,notes,config){
     const period=60/(config.bpm??features.meta.bpm),start=config.offset??notes[0].time;
@@ -93,7 +97,7 @@
   }
   function arrange(features,config,title){
     if(!features.transcription?.notes?.length)throw new Error('这份旧作品没有逐音转录数据，请重新导入音乐，选择“原伴奏转录”。');
-    const cleaned=cleanNotes(features.transcription.notes,features.attacks||[],features.meta.duration);
+    const cleaned=cleanNotes(features.transcription.notes,features.attacks||[],features.meta.duration,features.acoustic);
     const mapping=finger(cleaned.notes,config.capo,config.max_fret);
     if(!mapping.notes.length)throw new Error('没有可映射到标准吉他的音符，请使用清晰的吉他音轨。');
     const beats=grid(features,mapping.notes,config),offset=beats[0],meter=config.meter;
@@ -138,9 +142,9 @@
     return {...base,config,offset,bpm:config.bpm??Math.round(60/median(beats.slice(1).map((t,i)=>t-beats[i]))*10)/10,
       measures,chords:unique.map(name=>({name,frets:E.voicing(name),sounding:E.transpose(name,config.capo)})),
       capo_suggestions:base.capo_suggestions.filter(c=>c.capo<=minimum-40),beat_times:beats,
-      source_notes:retained.map(({choices,...note})=>note),algorithm:'basic-pitch-note-transcription-v2',
+      source_notes:retained.map(({choices,...note})=>note),algorithm:'basic-pitch-note-transcription-v3',
       quality:{status:'draft',model:features.transcription.model,raw_notes:features.transcription.notes.length,retained_notes:retained.length,
-        merged_retriggers:cleaned.merged,unmapped_notes:mapping.dropped,clipped_sustains:mapping.clipped,needs_review:true},
+        merged_retriggers:cleaned.merged,unsupported_retriggers:cleaned.unsupportedRetriggers,unmapped_notes:mapping.dropped,clipped_sustains:mapping.clipped,needs_review:true},
       review_count:retained.filter(n=>n.amplitude<.5).length,
       warnings:['逐音识别草稿：保留检测到的音高与实际时间，但仍可能漏音、多音或选错弦位。','和弦名称仅为估计标注，不参与生成转录音符。','请先试听短片段并校对，再使用整曲谱。']};
   }

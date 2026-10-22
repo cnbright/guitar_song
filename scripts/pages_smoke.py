@@ -40,6 +40,23 @@ def main():
         page.locator('#generate').click()
         page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
+        (output / 'score-initial.json').write_text(json.dumps(score,ensure_ascii=False))
+        assert score['comparison']['status'] in ['failed','passed']
+        if score['comparison']['status']=='failed':
+            assert page.locator('#print-button').is_disabled()
+            assert page.locator('[data-export="midi"]').get_attribute('aria-disabled')=='true'
+            assert '未通过验收' in page.locator('.success-tag').inner_text()
+        # Both sources restart at exactly the same bounded selection.
+        page.locator('#ab-start').fill('0.75')
+        page.locator('#ab-end').fill('1.4')
+        page.locator('#ab-original').click()
+        page.wait_for_timeout(1000)
+        assert page.locator('#source-audio').evaluate('a=>a.paused && a.currentTime>=1.4 && a.currentTime<1.6')
+        page.locator('#ab-generated').click()
+        page.wait_for_timeout(250)
+        assert page.evaluate('playing')
+        page.wait_for_timeout(800)
+        assert not page.evaluate('playing')
         page.locator('#play-score').click()
         page.wait_for_timeout(800)
         assert page.evaluate('playing')
@@ -58,6 +75,9 @@ def main():
         page.locator('#tab-grid [data-segment="0"]').click()
         page.locator('#reset-chord').click()
         page.wait_for_function('!state.busy && !state.score.measures[0].segments[0].edited')
+        if score['comparison']['status']=='failed':
+            page.locator('#draft-consent').check()
+            assert page.locator('#print-button').is_enabled()
         for kind in ['midi', 'musicxml', 'txt', 'json']:
             page.locator('#export-menu').evaluate('node=>node.open=true')
             with page.expect_download() as event:
@@ -71,6 +91,8 @@ def main():
             page.locator('[data-pattern="transcribe"]').click()
             page.locator('#generate').click()
             page.wait_for_function("!state.busy && state.score.config.pattern === 'transcribe'")
+        if page.locator('#draft-consent-row').is_visible():
+            page.locator('#draft-consent').check()
         page.evaluate('window.print=()=>{}')
         page.locator('#print-button').click()
         page.pdf(path=str(output / 'score.pdf'), format='A4', print_background=True)
@@ -85,9 +107,9 @@ def main():
         page.wait_for_function("!document.querySelector('#empty-state').hidden")
         assert not page.evaluate("localStorage.getItem('stringspace-job')")
         report = {'passed':True,'bpm':score['bpm'],'measures':len(score['measures']),
-                  'quality':score.get('quality'),
+                  'quality':score.get('quality'),'comparison':score['comparison']['overall'],
                   'api_requests':0,'browser_errors':errors,'checks':['decode','chord_analysis','capo',
-                  'synthesis','original_audio','indexeddb_restore','edit_reset','strum','exports','pdf','mobile','delete']}
+                  'synthesis','original_audio','bounded_ab','comparison','export_gate','indexeddb_restore','edit_reset','strum','exports','pdf','mobile','delete']}
         (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
         print(json.dumps(report, ensure_ascii=False))
         browser.close()
