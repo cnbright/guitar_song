@@ -19,7 +19,8 @@
   function transpose(chord,steps) { if(chord==='N')return chord; const [r,m]=parse(chord); return PITCHES[(r+steps+120)%12]+(m?'m':''); }
   function voicing(chord) { if(chord==='N')return Array(6).fill(null); const [r,m]=parse(chord); return [...(m?MINOR:MAJOR)[r]].map(f=>f==='x'?null:+f); }
   function configOptions(options={}) {
-    const c={capo:0,pattern:'arpeggio',rhythm:'folk',meter:4,bpm:null,offset:null,changes:'bar',overrides:{},max_fret:7,...options};
+    const c={capo:0,pattern:'arpeggio',arpeggio_rhythm:'auto',rhythm:'folk',meter:4,bpm:null,offset:null,changes:'bar',overrides:{},max_fret:7,...options};
+    if(!['auto','quarter','eighth'].includes(c.arpeggio_rhythm))throw new Error('请选择自动、每拍一次或每拍两次分解。');
     if(!Number.isInteger(c.max_fret)||c.max_fret<1||c.max_fret>24)throw new Error('最高品位应在 1–24 品之间。');
     if(!Number.isInteger(c.capo)||c.capo<0||c.capo>12) throw new Error('变调夹应为 0–12 品。');
     if(![3,4].includes(c.meter)) throw new Error('请选择 3/4 或 4/4 拍。');
@@ -202,7 +203,7 @@
     }
     return CHORDS[argmax(scores)];
   }
-  function noteEvents(shape,capo,pattern,rhythm,beats,beatOffset=0,meter=4) {
+  function noteEvents(shape,capo,pattern,rhythm,beats,beatOffset=0,meter=4,arpeggioRhythm='quarter') {
     const frets=voicing(shape),active=frets.map((f,i)=>f===null?-1:i).filter(i=>i>=0);
     if(!active.length)return [];
     const result=[],slots=Math.round(beats*2);
@@ -214,10 +215,12 @@
         else {if((meter===4?[1,4]:[1]).includes(globalSlot))continue;direction=globalSlot%2?'up':'down';}
         indices=direction==='down'?active:[...active.filter(i=>i>=2)].reverse();
       }else{
-        const order=slots===6?[active[0],3,4,5,4,3]:[active[0],3,4,3,5,3,4,3];
-        const i=order[slot%order.length];indices=[active.includes(i)?i:active.at(-1)];
+        if(arpeggioRhythm!=='eighth'&&globalSlot%2)continue;
+        const order=arpeggioRhythm==='eighth'?(meter===3?[active[0],3,4,5,4,3]:[active[0],3,4,3,5,3,4,3]):(meter===3?[active[0],3,4]:[active[0],3,4,5]);
+        const index=arpeggioRhythm==='eighth'?globalSlot:Math.floor(globalSlot/2);
+        const i=order[index%order.length];indices=[active.includes(i)?i:active.at(-1)];
       }
-      result.push({beat:round(beatOffset+slot/2),duration:pattern==='strum'&&rhythm==='steady'?1:.5,direction,
+      result.push({beat:round(beatOffset+slot/2),duration:(pattern==='strum'&&rhythm==='steady')||(pattern==='arpeggio'&&arpeggioRhythm!=='eighth')?1:.5,direction,
         notes:indices.map(i=>({string:6-i,fret:frets[i],midi:OPEN[i]+frets[i]+capo}))});
     }
     return result;
@@ -226,6 +229,10 @@
     if(options?.pattern==='transcribe'){
       if(!root.StringspaceTranscription)throw new Error('逐音转录组件未加载，请刷新页面。');
       return root.StringspaceTranscription.arrange(features,configOptions(options),title);
+    }
+    if((options?.pattern??'arpeggio')==='arpeggio'&&features.acoustic){
+      if(!root.StringspaceAccompaniment)throw new Error('简化分解组件未加载，请刷新页面。');
+      return root.StringspaceAccompaniment.arrange(features,configOptions(options),title);
     }
     const config=configOptions(options),meta=features.meta,bpm=config.bpm??meta.bpm,offset=config.offset??meta.offset;
     if(offset>=meta.duration-.05)throw new Error('起拍时间后没有足够的音乐，请提前起拍时间。');
@@ -243,7 +250,7 @@
       const group=segments.slice(i,i+perBar),events=[];
       group.forEach((segment,position)=>{
         const beats=config.meter/perBar,available=(segment.end-segment.start)/beatSeconds;
-        for(const event of noteEvents(segment.shape,config.capo,config.pattern,config.rhythm,beats,position*beats,config.meter)){
+        for(const event of noteEvents(segment.shape,config.capo,config.pattern,config.rhythm,beats,position*beats,config.meter,config.arpeggio_rhythm)){
           const local=event.beat-position*beats;if(local>=available-.015)continue;
           event.duration=round(Math.min(event.duration,available-local));event.time=round(segment.start+local*beatSeconds);events.push(event);
         }
@@ -261,7 +268,7 @@
       algorithm:meta.algorithm,warnings:['自动和弦识别后的伴奏编配，不是原录音逐音还原。','速度和起拍是估计值，请结合原音校对。','支持大、小三和弦，复杂和弦和转位会被简化。']};
   }
   function midiBytes(score) {
-    if(score.source_notes)return root.StringspaceTranscription.midiBytes(score);
+    if(score.source_notes||score.performance_notes)return root.StringspaceTranscription.midiBytes(score);
     const bytes=[],events=[];
     const variable=n=>{const out=[n&127];while(n>>=7)out.unshift((n&127)|128);return out;};
     const text=new TextEncoder().encode(score.title);bytes.push(0,255,3,...variable(text.length),...text);
@@ -276,7 +283,7 @@
     return new Uint8Array([77,84,104,100,0,0,0,6,0,0,0,1,1,224,77,84,114,107,(length>>>24)&255,(length>>>16)&255,(length>>>8)&255,length&255,...bytes]);
   }
   function musicxml(score) {
-    if(score.source_notes)return root.StringspaceTranscription.musicxml(score);
+    if(score.source_notes||score.performance_notes)return root.StringspaceTranscription.musicxml(score);
     const e=escapeXML,capo=score.config.capo,meter=score.config.meter;
     let xml=`<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><work><work-title>${e(score.title)}</work-title></work><part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list><part id="P1">`;
     const rest=n=>n>0?`<note><rest/><duration>${n}</duration></note>`:'';
@@ -303,7 +310,7 @@
     return xml+'</part></score-partwise>';
   }
   function textTab(score) {
-    if(score.source_notes)return root.StringspaceTranscription.textTab(score);
+    if(score.source_notes||score.performance_notes)return root.StringspaceTranscription.textTab(score);
     const lines=[score.title,`${score.bpm} BPM | ${score.config.meter}/4 | Capo ${score.config.capo}`,'和弦名为指型，数字相对变调夹。自动伴奏编配，请对照原音校对。',''];
     for(const bar of score.measures){
       lines.push(`第 ${bar.number} 小节 (${bar.start.toFixed(2)}s)  `+bar.segments.map(s=>s.shape).join(' → '));

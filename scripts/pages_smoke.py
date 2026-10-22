@@ -16,6 +16,7 @@ def main():
     parser.add_argument('--base', default='http://127.0.0.1:8080/docs/')
     parser.add_argument('--browser')
     parser.add_argument('--capo',type=int,default=0)
+    parser.add_argument('--aihe',action='store_true',help='Check the supplied reference excerpt against its displayed chord sheet')
     args = parser.parse_args()
     output = Path('artifacts/pages-check')
     output.mkdir(parents=True, exist_ok=True)
@@ -40,12 +41,32 @@ def main():
         page.locator('#generate').click()
         page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
+        if score.get('accompaniment'):
+            assert score['config']['pattern']=='arpeggio'
+            assert not score.get('source_notes') and not score.get('quality')
+            assert not any('/vendor/transcriber' in url or '/vendor/model/' in url for url in requests)
+            if args.aihe:
+                assert len(score['measures'][0]['events'])==4
+                assert [[n['midi'] for n in e['notes']] for e in score['measures'][0]['events']]==[[44],[56],[60,68],[56]]
+                assert [b['segments'][0]['shape'] for b in score['measures'][:8]]==['G','D','Em','C','G','Em','Am','D']
+                assert score['measures'][1]['segments'][0]['display_shape']=='D/F#'
+                assert score['measures'][1]['events'][0]['notes'][0]['midi']==43
+                expected=[[[44],[56],[60,68],[56]],[[43],[58],[63,67],[58]],[[41],[56],[60,65],[56]],[[49],[56],[61,65],[56]],[[44],[56],[60,68],[56]],[[41],[56],[60,65],[56]],[[46],[58],[61,65],[58]],[[51],[58],[63,67],[58]]]
+                assert [[[n['midi'] for n in e['notes']] for e in bar['events']] for bar in score['measures'][:8]]==expected
+            for rhythm,count in [('quarter',4),('eighth',8)]:
+                page.locator('#arpeggio-rhythm').select_option(rhythm)
+                page.locator('#generate').click()
+                page.wait_for_function('(r)=>!state.busy && state.score.config.arpeggio_rhythm===r',arg=rhythm)
+                assert page.evaluate('state.score.measures[0].events.length')==count
+            page.locator('#arpeggio-rhythm').select_option('auto')
+            page.locator('#generate').click()
+            page.wait_for_function("!state.busy && state.score.config.arpeggio_rhythm==='auto'")
         (output / 'score-initial.json').write_text(json.dumps(score,ensure_ascii=False))
         assert score['comparison']['status'] in ['failed','passed']
         if score['comparison']['status']=='failed':
             assert page.locator('#print-button').is_disabled()
             assert page.locator('[data-export="midi"]').get_attribute('aria-disabled')=='true'
-            assert '未通过验收' in page.locator('.success-tag').inner_text()
+            assert ('待校对' if score.get('accompaniment') else '未通过验收') in page.locator('.success-tag').inner_text()
         # Both sources restart at exactly the same bounded selection.
         page.locator('#ab-start').fill('0.75')
         page.locator('#ab-end').fill('1.4')
@@ -87,10 +108,10 @@ def main():
         page.locator('#generate').click()
         page.wait_for_function("!state.busy && state.score.config.pattern === 'strum'")
         assert page.evaluate('state.score.measures[0].events[0].notes.length') > 1
-        if score.get('quality'):
-            page.locator('[data-pattern="transcribe"]').click()
+        if score['config']['pattern']!='strum':
+            page.locator(f'[data-pattern="{score["config"]["pattern"]}"]').click()
             page.locator('#generate').click()
-            page.wait_for_function("!state.busy && state.score.config.pattern === 'transcribe'")
+            page.wait_for_function('(pattern)=>!state.busy && state.score.config.pattern===pattern',arg=score['config']['pattern'])
         if page.locator('#draft-consent-row').is_visible():
             page.locator('#draft-consent').check()
         page.evaluate('window.print=()=>{}')
@@ -107,7 +128,7 @@ def main():
         page.wait_for_function("!document.querySelector('#empty-state').hidden")
         assert not page.evaluate("localStorage.getItem('stringspace-job')")
         report = {'passed':True,'bpm':score['bpm'],'measures':len(score['measures']),
-                  'quality':score.get('quality'),'comparison':score['comparison']['overall'],
+                  'quality':score.get('quality'),'accompaniment':score.get('accompaniment'),'comparison':score['comparison']['overall'],
                   'api_requests':0,'browser_errors':errors,'checks':['decode','chord_analysis','capo',
                   'synthesis','original_audio','bounded_ab','comparison','export_gate','indexeddb_restore','edit_reset','strum','exports','pdf','mobile','delete']}
         (output / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))

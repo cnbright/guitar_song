@@ -99,7 +99,7 @@ def recognize(chroma: np.ndarray, rms: np.ndarray, ranges: list[tuple[int, int]]
     return output
 
 
-def note_events(shape: str, capo: int, pattern: str, rhythm: str, beats: float, beat_offset: float = 0, meter: int = 4) -> list[dict]:
+def note_events(shape: str, capo: int, pattern: str, rhythm: str, beats: float, beat_offset: float = 0, meter: int = 4, arpeggio_rhythm: str = 'quarter') -> list[dict]:
     frets = voicing(shape)
     active = [i for i, f in enumerate(frets) if f is not None]
     if not active:
@@ -121,13 +121,19 @@ def note_events(shape: str, capo: int, pattern: str, rhythm: str, beats: float, 
                 direction = 'up' if global_slot % 2 else 'down'
             indices = active if direction == 'down' else list(reversed([i for i in active if i >= 2]))
         else:
-            pattern_indices = [bass, 3, 4, 3, 5, 3, 4, 3] if slots != 6 else [bass, 3, 4, 5, 4, 3]
-            index = pattern_indices[slot % len(pattern_indices)]
+            if arpeggio_rhythm != 'eighth' and global_slot % 2:
+                continue
+            if arpeggio_rhythm == 'eighth':
+                pattern_indices = [bass, 3, 4, 5, 4, 3] if meter == 3 else [bass, 3, 4, 3, 5, 3, 4, 3]
+                index = pattern_indices[global_slot % len(pattern_indices)]
+            else:
+                pattern_indices = [bass, 3, 4] if meter == 3 else [bass, 3, 4, 5]
+                index = pattern_indices[(global_slot // 2) % len(pattern_indices)]
             indices = [index if index in active else active[-1]]
             direction = None
         notes = [{'string': 6 - i, 'fret': frets[i], 'midi': OPEN_MIDI[i] + int(frets[i]) + capo} for i in indices]
         events.append({'beat': round(beat_offset + slot / 2, 3),
-                       'duration': 1.0 if pattern == 'strum' and rhythm == 'steady' else 0.5,
+                       'duration': 1.0 if (pattern == 'strum' and rhythm == 'steady') or (pattern == 'arpeggio' and arpeggio_rhythm != 'eighth') else 0.5,
                        'direction': direction, 'notes': notes})
     return events
 
@@ -171,7 +177,7 @@ def arrange(folder: Path, config: ArrangementConfig, title: str) -> dict:
             requested_beats = config.meter / per_bar
             available_beats = (segment['end'] - segment['start']) / beat_seconds
             new_events = note_events(segment['shape'], config.capo, config.pattern, config.rhythm,
-                                     requested_beats, position * requested_beats, config.meter)
+                                     requested_beats, position * requested_beats, config.meter, config.arpeggio_rhythm)
             # Do not generate notes beyond the source's final partial measure.
             for event in new_events:
                 local = event['beat'] - position * requested_beats

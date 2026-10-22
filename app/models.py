@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ArrangementConfig(BaseModel):
     capo: int = Field(default=0, ge=0, le=12)
     pattern: Literal['arpeggio', 'strum'] = 'arpeggio'
+    arpeggio_rhythm: Literal['auto', 'quarter', 'eighth'] = 'auto'
     rhythm: Literal['steady', 'folk'] = 'folk'
     meter: Literal[3, 4] = 4
     bpm: float | None = Field(default=None, ge=40, le=220)

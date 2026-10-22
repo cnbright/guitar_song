@@ -55,7 +55,7 @@
   async function verifyScore(job,score){
     if(!job.features.acoustic){score.comparison={status:'unverified'};return score;}
     job.progress=92;job.message='正在把实际合成音与原音逐段对比';
-    const worker=new Worker(new URL('./audio-worker.js?v=3',document.baseURI));
+    const worker=new Worker(new URL('./audio-worker.js?v=4',document.baseURI));
     try{
       score.comparison=await new Promise((resolve,reject)=>{
         worker.onmessage=({data})=>{if(data.type==='verified')resolve(data.comparison);else if(data.type==='error')reject(new Error(data.message));};
@@ -83,7 +83,7 @@
       }
       const sampleRate=decoded.sampleRate;decoded=null;await context.close();context=null;
       job.features=await new Promise((resolve,reject)=>{
-        worker=new Worker(new URL('./audio-worker.js?v=3',document.baseURI));
+        worker=new Worker(new URL('./audio-worker.js?v=4',document.baseURI));
         worker.onmessage=({data})=>{
           if(data.type==='progress'){job.progress=job.config.pattern==='transcribe' && !data.message.includes('模型') && data.progress<80 && !data.message.includes('实际音符') ? Math.round(data.progress*.3) : data.progress;job.message=data.message;}
           else if(data.type==='complete')resolve(data.features);

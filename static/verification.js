@@ -60,7 +60,7 @@
     return score.measures.flatMap(b=>b.events.flatMap(event=>event.notes.map((note,index)=>({
       midi:note.midi,time:event.time+(note.onset_offset??(event.direction?index*.012:0)),
       duration:note.duration_seconds??event.duration_seconds??event.duration*60/score.bpm,
-      level:.35/Math.sqrt(event.notes.length)}))));
+      level:note.gain??.35/Math.sqrt(event.notes.length)}))));
   }
   function render(score,sampleRate=RATE){
     const audio=new Float32Array(Math.ceil(score.duration*sampleRate));
@@ -68,6 +68,8 @@
       const sound=pluck(note.midi,note.duration,sampleRate),start=Math.round(note.time*sampleRate);
       for(let i=Math.max(0,-start);i<sound.length&&start+i<audio.length;i++)audio[start+i]+=sound[i]*note.level;
     }
+    let peak=0;for(const sample of audio)peak=Math.max(peak,Math.abs(sample));
+    if(peak>.98)for(let i=0;i<audio.length;i++)audio[i]*=.98/peak;
     return audio;
   }
   function performedAttacks(score){
@@ -137,7 +139,9 @@
     // Include the first attack, which a centered onset detector places slightly before the note timestamp.
     const ranges=score.measures.map((bar,i)=>({measure:bar.number,start:i?bar.start-.08:0,
       end:i+1<score.measures.length?score.measures[i+1].start-.08:score.duration}));
-    return compare(reference,generated,ranges);
+    const comparison=compare(reference,generated,ranges);
+    if(score.accompaniment)comparison.estimation_note='简化分解使用原音起音检测作节奏输入，起音对比核验编配是否额外加密或错位，不是独立的识别准确率评估。';
+    return comparison;
   }
   function wav(samples,sampleRate=RATE){
     const bytes=new ArrayBuffer(44+samples.length*2),view=new DataView(bytes);

@@ -78,6 +78,13 @@ def test_half_measure_keeps_folk_strum_pattern(features):
     assert len(score['measures'][0]['events']) == 6
 
 
+def test_simplified_arpeggio_density_is_explicit(features):
+    for rhythm, count in [('auto', 4), ('quarter', 4), ('eighth', 8)]:
+        score = arrange(features, ArrangementConfig(arpeggio_rhythm=rhythm), 'density')
+        assert len(score['measures'][0]['events']) == count
+    assert len(note_events('G', 1, 'arpeggio', 'folk', 3, meter=3)) == 3
+
+
 def test_three_four_and_last_partial_measure(features):
     score = arrange(features, ArrangementConfig(meter=3, bpm=100, offset=.4), 'test')
     for bar in score['measures']:

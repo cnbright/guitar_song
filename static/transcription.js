@@ -155,12 +155,12 @@
     track.push(0,255,88,4,score.config.meter,2,24,8);
     for(let channel=0;channel<6;channel++)track.push(0,192+channel,24);
     const rate=480*score.bpm/60;
-    for(const note of score.source_notes){
+    for(const note of score.source_notes??score.performance_notes){
       const tick=Math.max(0,Math.round((note.time-score.offset)*rate)),end=tick+Math.max(1,Math.round(note.duration*rate));
       events.push({tick,on:true,note},{tick:end,on:false,note});
     }
     events.sort((a,b)=>a.tick-b.tick||Number(a.on)-Number(b.on));let previous=0;
-    for(const {tick,on,note} of events){track.push(...variable(tick-previous),(on?144:128)+note.string-1,note.midi,on?80:0);previous=tick;}
+    for(const {tick,on,note} of events){track.push(...variable(tick-previous),(on?144:128)+note.string-1,note.midi,on?(note.gain===undefined?80:Math.min(127,Math.max(1,Math.round(100*Math.sqrt(note.gain))))):0);previous=tick;}
     track.push(0,255,47,0);const n=track.length;
     return new Uint8Array([77,84,104,100,0,0,0,6,0,0,0,1,1,224,77,84,114,107,n>>>24&255,n>>>16&255,n>>>8&255,n&255,...track]);
   }
@@ -168,25 +168,27 @@
   function musicxml(score){
     const meter=score.config.meter,barTicks=meter*480;
     const pitches=[['C',0],['C',1],['D',0],['E',-1],['E',0],['F',0],['F',1],['G',0],['A',-1],['A',0],['B',-1],['B',0]];
-    let xml=`<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><work><work-title>${xmlEscape(score.title)} · 逐音转录草稿</work-title></work><part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list><part id="P1">`;
+    const label=score.performance_notes?'简化分解':'逐音转录草稿';
+    let xml=`<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><work><work-title>${xmlEscape(score.title)} · ${label}</work-title></work><part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list><part id="P1">`;
     const rest=(ticks,voice)=>ticks>0?`<note><rest/><duration>${ticks}</duration><voice>${voice}</voice></note>`:'';
     for(const bar of score.measures){
       xml+=`<measure number="${bar.number}">`;
       if(bar.number===1){
         xml+=`<attributes><divisions>480</divisions><time><beats>${meter}</beats><beat-type>4</beat-type></time><clef><sign>TAB</sign><line>5</line></clef><staff-details><staff-lines>6</staff-lines>`;
         ['E','A','D','G','B','E'].forEach((step,i)=>xml+=`<staff-tuning line="${i+1}"><tuning-step>${step}</tuning-step><tuning-octave>${Math.floor(E.OPEN[i]/12)-1}</tuning-octave></staff-tuning>`);
-        xml+=`<capo>${score.config.capo}</capo></staff-details></attributes><direction><direction-type><words>逐音转录草稿，请校对。和弦标注为估计值。</words></direction-type></direction>`;
+        xml+=`<capo>${score.config.capo}</capo></staff-details></attributes><direction><direction-type><words>${label}，请校对。和弦标注为估计值。</words></direction-type></direction>`;
       }
       for(let beat=0;beat<meter;beat++)xml+=`<direction><direction-type><words/></direction-type><offset>${beat*480}</offset><sound tempo="${60/(bar.beat_times[beat+1]-bar.beat_times[beat])}"/></direction>`;
       for(const segment of bar.segments){
         if(segment.shape==='N')continue;
         const [r,m]=E.parse(segment.shape),[step,alter]=pitches[r];
-        xml+=`<harmony><root><root-step>${step}</root-step>${alter?`<root-alter>${alter}</root-alter>`:''}</root><kind>${m?'minor':'major'}</kind><offset>${Math.round(timeToBeat(bar.beat_times,segment.start)*480)}</offset></harmony>`;
+        const bass=segment.display_shape&&Number.isInteger(segment.bass_midi)?pitches[(segment.bass_midi-score.config.capo+120)%12]:null;
+        xml+=`<harmony><root><root-step>${step}</root-step>${alter?`<root-alter>${alter}</root-alter>`:''}</root><kind>${m?'minor':'major'}</kind>${bass?`<bass><bass-step>${bass[0]}</bass-step>${bass[1]?`<bass-alter>${bass[1]}</bass-alter>`:''}</bass>`:''}<offset>${Math.round(timeToBeat(bar.beat_times,segment.start)*480)}</offset></harmony>`;
       }
       for(let voice=1;voice<=6;voice++){
         if(voice>1)xml+=`<backup><duration>${barTicks}</duration></backup>`;
         let position=0;
-        const notes=score.source_notes.filter(n=>n.string===voice&&n.time<bar.beat_times.at(-1)&&n.time+n.duration>bar.start);
+        const notes=(score.source_notes??score.performance_notes).filter(n=>n.string===voice&&n.time<bar.beat_times.at(-1)&&n.time+n.duration>bar.start);
         for(const note of notes){
           const from=Math.max(note.time,bar.start),to=Math.min(note.time+note.duration,bar.beat_times.at(-1));
           const start=Math.max(position,Math.round(timeToBeat(bar.beat_times,from)*480)),end=Math.min(barTicks,Math.round(timeToBeat(bar.beat_times,to)*480));
@@ -203,9 +205,9 @@
     return xml+'</part></score-partwise>';
   }
   function textTab(score){
-    const lines=[score.title+' · 逐音转录草稿',`Capo ${score.config.capo} | ${score.bpm} BPM（小节随起音校正）`,'每列为一次检测起音，列间不等时。精确时值请使用 MIDI 或 MusicXML。',''];
+    const lines=[score.title+' · '+(score.performance_notes?'简化分解':'逐音转录草稿'),`Capo ${score.config.capo} | ${score.bpm} BPM（小节随起音校正）`,'每列为一次起音，列间不等时。精确时值请使用 MIDI 或 MusicXML。',''];
     for(const bar of score.measures){
-      lines.push(`第 ${bar.number} 小节 · ${bar.start.toFixed(3)}s`);
+      lines.push(`第 ${bar.number} 小节 · ${bar.start.toFixed(3)}s · `+bar.segments.map(s=>s.display_shape??s.shape).join(' → '));
       const rows=Array.from({length:6},()=>[]);
       for(const event of bar.events){
         for(let string=1;string<=6;string++){const note=event.notes.find(n=>n.string===string);rows[string-1].push(note?String(note.fret).padStart(2,'-').padEnd(4,'-'):'----');}
