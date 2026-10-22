@@ -313,7 +313,7 @@
     }
     return lines.join('\n');
   }
-  const engine={CHORDS,OPEN,parse,transpose,voicing,configOptions,analyze,detectAttacks,recognize,arrange,noteEvents,midiBytes,musicxml,textTab};
+  const engine={CHORDS,OPEN,FFT,parse,transpose,voicing,configOptions,analyze,detectAttacks,recognize,arrange,noteEvents,midiBytes,musicxml,textTab};
   root.StringspaceEngine=engine;
   if(typeof module!=='undefined'&&module.exports)module.exports=engine;
 })(globalThis);
