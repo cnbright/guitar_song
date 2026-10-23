@@ -166,7 +166,7 @@ function acceptScore(score) {
   $('#step-two').classList.add('active');
   $('#score-title').textContent = score.title;
   $('#score-meta').innerHTML = `<div><small>速度 · 估计</small><strong>${score.bpm} <i>BPM</i></strong></div><div><small>原调 · 估计</small><strong>${esc(score.key)}</strong></div><div><small>变调夹</small><strong>${score.config.capo ? score.config.capo + ' <i>品</i>' : '无'}</strong></div><div><small>出谱方式</small><strong><i>${patternName(score.config.pattern)} · ${score.config.meter}/4</i></strong></div>`;
-  $('#quality-banner').textContent = BROWSER_MODE?`${comparisonPassed?'达到当前自动检查门槛，仍需人工校对。':'未通过原音验收。以下是用于定位问题的草稿，不是可靠的原曲谱。'} ${score.quality?`保留 ${score.quality.retained_notes} 个音符，${score.quality.unmapped_notes} 个未映射；合并 ${score.quality.unsupported_retriggers??0} 个缺少该音高起音支持的重复音。`:(score.accompaniment?`${score.accompaniment.mode==='audio-guided'?'跟随原音':'按固定疏密'}生成 ${score.accompaniment.attacks} 次拨弦，${score.accompaniment.inferred_attacks??0} 处按规则补齐需复核；未使用逐音转录模型。`:'使用手动指定的固定节奏编配。')}`:'这是固定节奏的简化编配，不能还原原伴奏。';
+  $('#quality-banner').textContent = BROWSER_MODE?`${comparisonPassed?'达到当前自动检查门槛，仍需人工校对。':'未通过原音验收。以下是用于定位问题的草稿，不是可靠的原曲谱。'} ${score.quality?`保留 ${score.quality.retained_notes} 个音符，${score.quality.unmapped_notes} 个未映射；合并 ${score.quality.unsupported_retriggers??0} 个缺少该音高起音支持的重复音。`:(score.accompaniment?`${score.accompaniment.mode==='audio-guided'?'跟随原音':'按固定疏密'}生成 ${score.accompaniment.attacks} 次拨弦，${score.accompaniment.inferred_attacks??0} 处弱起音、${score.accompaniment.inferred_pitch_events??0} 处音高仍需复核；未使用逐音转录模型。`:'使用手动指定的固定节奏编配。')}`:'这是固定节奏的简化编配，不能还原原伴奏。';
   $('.success-tag').textContent = BROWSER_MODE?(comparisonPassed?'自动检查达标':score.accompaniment?'简化分解 · 待校对':'未通过验收'):'简化编配';
   const peak = Math.max(...score.waveform, 0.01);
   $('#waveform').innerHTML = score.waveform.filter((_, i) => i % 2 === 0).map(v => `<i style="height:${Math.max(3, v / peak * 38)}px"></i>`).join('');
@@ -264,7 +264,11 @@ function measureHTML(bar, print = false) {
   for(let i=0;i<slots;i++) svg += `<text x="${xpos(i/2)}" y="128" text-anchor="middle" fill="#acb69f" font-size="7">${i%2 ? '&' : 1+i/2}</text>`;
   bar.events.forEach(event => {
     const x = xpos(event.beat);
-    if(event.inferred)svg+=`<text x="${x}" y="14" text-anchor="middle" fill="#ad7e3c" font-size="10"><title>按规则补齐的弱起音，请对照原音校对</title>?</text>`;
+    if(event.inferred){
+      const reason=event.attack_source==='manual-grid'?'手动节奏，音高仍需对照原音校对':event.attack_inferred?(event.pitch_inferred?'起音与音高仍有推断，请对照原音校对':'弱起音由局部变化与节奏推断，请对照原音校对'):
+        event.pitch_inferred?'检测到起音，音高仍由右手型推断，请对照原音校对':'按规则补齐的弱起音，请对照原音校对';
+      svg+=`<text x="${x}" y="14" text-anchor="middle" fill="#ad7e3c" font-size="10"><title>${reason}</title>?</text>`;
+    }
     if (event.direction) svg += `<text x="${x}" y="14" text-anchor="middle" fill="#9eac8f" font-size="12">${event.direction === 'down' ? '↓' : '↑'}</text>`;
     // Each column is an eighth-note slot, with stems showing playable rhythm.
     svg += `<path d="M${x} 100V113" stroke="#9aa98b" stroke-width=".8"/>`;
