@@ -42,7 +42,7 @@ def main():
         page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert score['comparison']['renderer_version']=='iowa-acoustic-v1'
+        assert score['comparison']['renderer_version']==('iowa-acoustic-v1-balanced-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert any('/instruments/acoustic-guitar.bin' in url for url in requests)
         if score.get('accompaniment'):
             assert score['config']['pattern']=='arpeggio'
@@ -99,7 +99,7 @@ def main():
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert page.evaluate('state.score.comparison.renderer_version')=='iowa-acoustic-v1'
+        assert page.evaluate('state.score.comparison.renderer_version')==('iowa-acoustic-v1-balanced-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert page.evaluate('JSON.stringify(state.score.measures)')==saved_events
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')

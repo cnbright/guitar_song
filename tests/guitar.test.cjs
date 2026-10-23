@@ -68,3 +68,35 @@ test('sampled playback still rejects doubled picks and octave mistakes',async()=
   const octave=V.verify(make(4,57),reference);
   assert.equal(octave.status,'failed');assert.ok(octave.overall.failures.includes('音高谱差异'));
 });
+
+test('a weak middle-string pick remains audible under a ringing bass in practice playback',async()=>{
+  await G.load();
+  const raw={duration:2,bpm:120,measures:[{number:1,start:0,end:2,events:[
+    {time:.2,duration_seconds:1.5,notes:[{midi:44,gain:.451}]},
+    {time:.653,duration_seconds:.94,notes:[{midi:56,gain:.066}]}
+  ]}]};
+  const balanced={...structuredClone(raw),accompaniment:{mode:'audio-guided'}};
+  const snapshot=JSON.stringify(balanced),muted=structuredClone(balanced);
+  muted.measures[0].events[1].notes[0].gain=0;
+  const old=V.render(raw),fresh=V.render(balanced),bass=V.render(muted);
+  let oldPower=0,newPower=0;
+  for(let i=Math.round(.673*22050);i<Math.round(.803*22050);i++){
+    oldPower+=(old[i]-bass[i])**2;newPower+=(fresh[i]-bass[i])**2;
+  }
+  const boostDB=10*Math.log10(newPower/oldPower);
+  assert.ok(boostDB>7&&boostDB<10,`weak pick boost ${boostDB} dB`);
+  assert.equal(JSON.stringify(balanced),snapshot);
+  assert.deepEqual(V.performedAttacks(balanced),V.performedAttacks(raw));
+  assert.equal(V.scoreNotes(balanced)[0].level,.451);
+  assert.equal(V.scoreNotes(muted)[1].level,0);
+  assert.notEqual(V.rendererVersion(balanced),V.rendererVersion(raw));
+});
+
+test('balancing keeps volume order and local phrasing, with a bounded boost',()=>{
+  const make=gains=>({accompaniment:{},bpm:120,measures:[{events:gains.map((gain,i)=>({time:i,duration_seconds:.2,notes:[{midi:52,gain}]}))}]});
+  const gains=[0,.001,.02,.066,.2,.45],levels=V.scoreNotes(make(gains)).map(n=>n.level);
+  assert.ok(levels.every((x,i)=>x>=gains[i]&&x<=gains[i]*4));
+  assert.ok(levels.every((x,i)=>!i||x>=levels[i-1]));
+  const quieter=V.scoreNotes(make(gains.map(g=>g/2))).map(n=>n.level);
+  for(let i=0;i<levels.length;i++)assert.ok(Math.abs(quieter[i]*2-levels[i])<1e-12);
+});
