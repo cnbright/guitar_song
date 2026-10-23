@@ -39,7 +39,8 @@
     const before=mean(time-.14,time-.055),after=mean(time+.025,time+.11);
     return after/Math.max(before,1e-8);
   }
-  // Deterministic plucked-string renderer shared with browser playback and WAV export.
+  // Stable analysis dictionary. Keep it separate from the audible instrument:
+  // changing playback timbre must not change already recognized notes/chords.
   function pluck(midi,duration,sampleRate=RATE){
     const length=Math.ceil(sampleRate*Math.min(Math.max(.01,duration),6)),out=new Float32Array(length);
     const frequency=440*2**((midi-69)/12),harmonics=[1,.42,.24,.16,.12,.08];
@@ -65,7 +66,7 @@
   function render(score,sampleRate=RATE){
     const audio=new Float32Array(Math.ceil(score.duration*sampleRate));
     for(const note of scoreNotes(score)){
-      const sound=pluck(note.midi,note.duration,sampleRate),start=Math.round(note.time*sampleRate);
+      const sound=(root.StringspaceGuitar?.pluck??pluck)(note.midi,note.duration,sampleRate),start=Math.round(note.time*sampleRate);
       for(let i=Math.max(0,-start);i<sound.length&&start+i<audio.length;i++)audio[start+i]+=sound[i]*note.level;
     }
     let peak=0;for(const sample of audio)peak=Math.max(peak,Math.abs(sample));
@@ -140,6 +141,7 @@
     const ranges=score.measures.map((bar,i)=>({measure:bar.number,start:i?bar.start-.08:0,
       end:i+1<score.measures.length?score.measures[i+1].start-.08:score.duration}));
     const comparison=compare(reference,generated,ranges);
+    comparison.renderer_version=root.StringspaceGuitar?.VERSION??'additive-v1';
     if(score.accompaniment)comparison.estimation_note='简化分解使用原音起音检测作节奏输入，起音对比核验编配是否额外加密或错位，不是独立的识别准确率评估。';
     return comparison;
   }
@@ -152,6 +154,7 @@
     for(let i=0;i<samples.length;i++)view.setInt16(44+i*2,Math.max(-32767,Math.min(32767,Math.round(samples[i]*32767))),true);
     return bytes;
   }
-  const api={VERSION,LIMITS,extract,pitchRise,pluck,scoreNotes,render,performedAttacks,matchAttacks,compare,verify,wav};
+  const prepare=()=>root.StringspaceGuitar?.load()??Promise.resolve();
+  const api={VERSION,LIMITS,extract,pitchRise,pluck,prepare,scoreNotes,render,performedAttacks,matchAttacks,compare,verify,wav};
   root.StringspaceVerification=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);
