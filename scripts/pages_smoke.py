@@ -41,6 +41,9 @@ def main():
         page.locator('#generate').click()
         page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
+        assert page.evaluate('StringspaceGuitar.ready')
+        assert score['comparison']['renderer_version']=='iowa-acoustic-v1'
+        assert any('/instruments/acoustic-guitar.bin' in url for url in requests)
         if score.get('accompaniment'):
             assert score['config']['pattern']=='arpeggio'
             assert not score.get('source_notes') and not score.get('quality')
@@ -82,8 +85,26 @@ def main():
         page.wait_for_timeout(800)
         assert page.evaluate('playing')
         page.locator('#play-score').click()
+        # Restored old comparisons must be recomputed for the new audible sound,
+        # while the score's notes and actual timing stay unchanged.
+        saved_events=page.evaluate('JSON.stringify(state.score.measures)')
+        page.evaluate('''async()=>{
+          const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('stringspace-browser-v1',1);r.onsuccess=()=>resolve(r.result);r.onerror=reject;});
+          await new Promise((resolve,reject)=>{
+            const t=db.transaction('jobs','readwrite'),store=t.objectStore('jobs'),r=store.get(state.id);
+            r.onsuccess=()=>{const job=r.result;delete job.score.comparison.renderer_version;store.put(job);};
+            t.oncomplete=resolve;t.onerror=reject;
+          });db.close();
+        }''')
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')
+        assert page.evaluate('StringspaceGuitar.ready')
+        assert page.evaluate('state.score.comparison.renderer_version')=='iowa-acoustic-v1'
+        assert page.evaluate('JSON.stringify(state.score.measures)')==saved_events
+        page.reload(wait_until='networkidle')
+        page.wait_for_function('state.score && !state.busy')
+        assert page.evaluate('StringspaceGuitar.ready')
+        assert page.evaluate('JSON.stringify(state.score.measures)')==saved_events
         assert page.evaluate('state.score.config.capo') == args.capo
         page.locator('#source-audio').evaluate('audio=>audio.play()')
         page.wait_for_timeout(1000)
@@ -99,6 +120,16 @@ def main():
         if score['comparison']['status']=='failed':
             page.locator('#draft-consent').check()
             assert page.locator('#print-button').is_enabled()
+        with page.expect_download() as event:
+            page.locator('#download-audio').click()
+        event.value.save_as(str(output / 'sampled-guitar.wav'))
+        assert page.evaluate('''async()=>{
+          const pcm=new DataView(await (await fetch(document.querySelector('#download-audio').href)).arrayBuffer());
+          const rendered=StringspaceVerification.render(state.score);
+          if(pcm.getUint32(24,true)!==22050||pcm.byteLength!==44+rendered.length*2)return false;
+          for(let i=0;i<rendered.length;i+=1021)if(Math.abs(pcm.getInt16(44+i*2,true)/32767-rendered[i])>.00004)return false;
+          return true;
+        }''')
         for kind in ['midi', 'musicxml', 'txt', 'json']:
             page.locator('#export-menu').evaluate('node=>node.open=true')
             with page.expect_download() as event:

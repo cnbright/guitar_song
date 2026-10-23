@@ -353,6 +353,7 @@ async function startPlayback(range=null) {
   stopPlayback();clearInterval(abTimer);
   try {
     audioContext ||= new (window.AudioContext || window.webkitAudioContext)();await audioContext.resume();
+    await window.StringspaceVerification.prepare();
     const originalTime=!$('#source-audio').paused?$('#source-audio').currentTime:null;
     $('#source-audio').pause();
     const speed=+$('#playback-speed').value,start=range?.start??originalTime??state.score.measures[state.page*PAGE_SIZE].start;

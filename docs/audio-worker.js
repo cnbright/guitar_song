@@ -1,11 +1,13 @@
 'use strict';
-importScripts('./engine.js?v=4');
-importScripts('./verification.js?v=4');
-importScripts('./transcription.js?v=4');
-importScripts('./accompaniment.js?v=4');
+importScripts('./guitar.js?v=4.1');
+importScripts('./engine.js?v=4.1');
+importScripts('./verification.js?v=4.1');
+importScripts('./transcription.js?v=4.1');
+importScripts('./accompaniment.js?v=4.1');
 self.onmessage=async event=>{
   try{
     if(event.data.kind==='verify'){
+      await StringspaceVerification.prepare();
       const comparison=StringspaceVerification.verify(event.data.score,event.data.reference);
       self.postMessage({type:'verified',comparison});return;
     }
