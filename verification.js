@@ -58,11 +58,23 @@
     return out;
   }
   function scoreNotes(score){
-    return score.measures.flatMap(b=>b.events.flatMap(event=>event.notes.map((note,index)=>({
-      midi:note.midi,time:event.time+(note.onset_offset??(event.direction?index*.012:0)),
-      duration:note.duration_seconds??event.duration_seconds??event.duration*60/score.bpm,
-      level:note.gain??.35/Math.sqrt(event.notes.length)}))));
+    return score.measures.flatMap(bar=>{
+      const notes=bar.events.flatMap(event=>event.notes.map((note,index)=>({
+        midi:note.midi,time:event.time+(note.onset_offset??(event.direction?index*.012:0)),
+        duration:note.duration_seconds??event.duration_seconds??event.duration*60/score.bpm,
+        level:note.gain??.35/Math.sqrt(event.notes.length)})));
+      if(score.accompaniment){
+        // Harmonic fitting can severely underestimate a middle string under a
+        // ringing bass. Compress the practice playback's dynamic range rather
+        // than turning those visible notes into almost inaudible attacks.
+        // Keep the strongest note, explicit silence, and the raw score intact.
+        const anchor=Math.max(0,...notes.map(note=>note.level));
+        for(const note of notes)if(note.level>0)note.level=Math.min(note.level*4,Math.sqrt(note.level*anchor));
+      }
+      return notes;
+    });
   }
+  const rendererVersion=score=>(root.StringspaceGuitar?.VERSION??'additive-v1')+(score.accompaniment?'-balanced-v1':'');
   function render(score,sampleRate=RATE){
     const audio=new Float32Array(Math.ceil(score.duration*sampleRate));
     for(const note of scoreNotes(score)){
@@ -141,7 +153,7 @@
     const ranges=score.measures.map((bar,i)=>({measure:bar.number,start:i?bar.start-.08:0,
       end:i+1<score.measures.length?score.measures[i+1].start-.08:score.duration}));
     const comparison=compare(reference,generated,ranges);
-    comparison.renderer_version=root.StringspaceGuitar?.VERSION??'additive-v1';
+    comparison.renderer_version=rendererVersion(score);
     if(score.accompaniment)comparison.estimation_note='简化分解使用原音起音检测作节奏输入，起音对比核验编配是否额外加密或错位，不是独立的识别准确率评估。';
     return comparison;
   }
@@ -155,6 +167,6 @@
     return bytes;
   }
   const prepare=()=>root.StringspaceGuitar?.load()??Promise.resolve();
-  const api={VERSION,LIMITS,extract,pitchRise,pluck,prepare,scoreNotes,render,performedAttacks,matchAttacks,compare,verify,wav};
+  const api={VERSION,LIMITS,extract,pitchRise,pluck,prepare,rendererVersion,scoreNotes,render,performedAttacks,matchAttacks,compare,verify,wav};
   root.StringspaceVerification=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);
