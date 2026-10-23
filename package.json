@@ -1,6 +1,6 @@
 {
   "name": "stringspace-guitar",
-  "version": "4.2.0",
+  "version": "5.0.0",
   "private": true,
   "scripts": {
     "build:model": "node scripts/build_model.cjs",

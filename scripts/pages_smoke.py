@@ -42,10 +42,13 @@ def main():
         page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert score['comparison']['renderer_version']==('iowa-acoustic-v1-balanced-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
+        assert score['comparison']['renderer_version']==('iowa-acoustic-v1-onset-envelope-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert any('/instruments/acoustic-guitar.bin' in url for url in requests)
         if score.get('accompaniment'):
             assert score['config']['pattern']=='arpeggio'
+            assert score['accompaniment']['version']=='adaptive-arpeggio-v2'
+            assert score['accompaniment']['dynamics']=='onset-envelope-v1'
+            assert page.evaluate('StringspaceVerification.scoreNotes(state.score).every(n=>state.score.measures.flatMap(b=>b.events).some(e=>Math.abs(e.time-n.time)<.001 && e.notes.some(x=>x.midi===n.midi && x.gain===n.level)))')
             assert not score.get('source_notes') and not score.get('quality')
             assert not any('/vendor/transcriber' in url or '/vendor/model/' in url for url in requests)
             if args.aihe:
@@ -56,6 +59,14 @@ def main():
                 assert score['measures'][1]['events'][0]['notes'][0]['midi']==43
                 expected=[[[44],[56],[60,68],[56]],[[43],[58],[63,67],[58]],[[41],[56],[60,65],[56]],[[49],[56],[61,65],[56]],[[44],[56],[60,68],[56]],[[41],[56],[60,65],[56]],[[46],[58],[61,65],[58]],[[51],[58],[63,67],[58]]]
                 assert [[[n['midi'] for n in e['notes']] for e in bar['events']] for bar in score['measures'][:8]]==expected
+                for index in [10,11,16]:
+                    note=score['measures'][index]['events'][1]['notes'][0]
+                    assert note['midi']==56 and note['gain']>.1
+                    assert note['duration_seconds']<.6
+                    assert note['dynamics_method'].startswith('source-envelope')
+                assert score['measures'][10]['events'][1]['attack_inferred'] is False
+                assert score['measures'][10]['events'][1]['pitch_inferred'] is True
+                assert score['measures'][11]['events'][1]['attack_inferred'] is True
             for rhythm,count in [('quarter',4),('eighth',8)]:
                 page.locator('#arpeggio-rhythm').select_option(rhythm)
                 page.locator('#generate').click()
@@ -92,14 +103,21 @@ def main():
           const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('stringspace-browser-v1',1);r.onsuccess=()=>resolve(r.result);r.onerror=reject;});
           await new Promise((resolve,reject)=>{
             const t=db.transaction('jobs','readwrite'),store=t.objectStore('jobs'),r=store.get(state.id);
-            r.onsuccess=()=>{const job=r.result;delete job.score.comparison.renderer_version;store.put(job);};
+            r.onsuccess=()=>{
+              const job=r.result;delete job.score.comparison.renderer_version;
+              if(job.score.accompaniment){
+                job.score.accompaniment.version='adaptive-arpeggio-v1';delete job.score.accompaniment.dynamics;
+                const note=job.score.measures[0].events[1].notes[0];note.gain=.02;note.duration_seconds=1.5;
+              }
+              store.put(job);
+            };
             t.oncomplete=resolve;t.onerror=reject;
           });db.close();
         }''')
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert page.evaluate('state.score.comparison.renderer_version')==('iowa-acoustic-v1-balanced-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
+        assert page.evaluate('state.score.comparison.renderer_version')==('iowa-acoustic-v1-onset-envelope-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert page.evaluate('JSON.stringify(state.score.measures)')==saved_events
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')

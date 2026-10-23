@@ -63,7 +63,7 @@
         midi:note.midi,time:event.time+(note.onset_offset??(event.direction?index*.012:0)),
         duration:note.duration_seconds??event.duration_seconds??event.duration*60/score.bpm,
         level:note.gain??.35/Math.sqrt(event.notes.length)})));
-      if(score.accompaniment){
+      if(score.accompaniment&&score.accompaniment.dynamics!=='onset-envelope-v1'){
         // Harmonic fitting can severely underestimate a middle string under a
         // ringing bass. Compress the practice playback's dynamic range rather
         // than turning those visible notes into almost inaudible attacks.
@@ -74,7 +74,17 @@
       return notes;
     });
   }
-  const rendererVersion=score=>(root.StringspaceGuitar?.VERSION??'additive-v1')+(score.accompaniment?'-balanced-v1':'');
+  const rendererVersion=score=>(root.StringspaceGuitar?.VERSION??'additive-v1')+(score.accompaniment?(score.accompaniment.dynamics==='onset-envelope-v1'?'-onset-envelope-v1':'-balanced-v1'):'');
+  const rmsCalibration=new Map();
+  function instrumentRMS(midi){
+    const guitar=root.StringspaceGuitar,key=(guitar?.ready?guitar.VERSION:'additive-v1')+':'+midi;
+    if(!rmsCalibration.has(key)){
+      const samples=(guitar?.ready?guitar.pluck:pluck)(midi,.25);let energy=0,count=0;
+      for(let i=Math.round(.035*RATE);i<Math.min(samples.length,Math.round(.16*RATE));i++){energy+=samples[i]**2;count++;}
+      rmsCalibration.set(key,Math.sqrt(energy/Math.max(1,count)));
+    }
+    return rmsCalibration.get(key);
+  }
   function render(score,sampleRate=RATE){
     const audio=new Float32Array(Math.ceil(score.duration*sampleRate));
     for(const note of scoreNotes(score)){
@@ -167,6 +177,6 @@
     return bytes;
   }
   const prepare=()=>root.StringspaceGuitar?.load()??Promise.resolve();
-  const api={VERSION,LIMITS,extract,pitchRise,pluck,prepare,rendererVersion,scoreNotes,render,performedAttacks,matchAttacks,compare,verify,wav};
+  const api={VERSION,LIMITS,extract,pitchRise,pluck,prepare,rendererVersion,instrumentRMS,scoreNotes,render,performedAttacks,matchAttacks,compare,verify,wav};
   root.StringspaceVerification=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

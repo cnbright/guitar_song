@@ -1,0 +1,102 @@
+{
+  "algorithm": "adaptive-arpeggio-v2",
+  "renderer_version": "iowa-acoustic-v1-onset-envelope-v1",
+  "reference_seconds": 147.12,
+  "capo": 1,
+  "scope": "Generation behavior and practice audibility; not a claim of reliable note transcription or whole-song fidelity.",
+  "dynamics_limitation": "Local mixture RMS is used to reconstruct simplified performance dynamics; it is not isolated per-string source energy.",
+  "checks": {
+    "javascript_tests": 52,
+    "full_reference_browser_workflow": true,
+    "first_8_chord_regions_preserve_4_picks_and_annotated_notes": true,
+    "old_generation_cache_is_rearranged": true,
+    "WAV_matches_playback_PCM": true
+  },
+  "targeted_picks": [
+    {
+      "measure": 11,
+      "time": 19.610999999999997,
+      "midi": 56,
+      "old_gain": 0.02,
+      "new_gain": 0.15428923247232398,
+      "new_duration_seconds": 0.4410000000000025,
+      "attack_inferred": false,
+      "pitch_inferred": true,
+      "dynamics_inferred": true,
+      "voice_RMS_boost_vs_v4_2_db": 5.7049
+    },
+    {
+      "measure": 12,
+      "time": 21.437590612296695,
+      "midi": 56,
+      "old_gain": 0.02,
+      "new_gain": 0.25781486201544956,
+      "new_duration_seconds": 0.44940938770330163,
+      "attack_inferred": true,
+      "pitch_inferred": true,
+      "dynamics_inferred": true,
+      "voice_RMS_boost_vs_v4_2_db": 10.1644
+    },
+    {
+      "measure": 17,
+      "time": 30.663999999999998,
+      "midi": 56,
+      "old_gain": 0.06600252154348636,
+      "new_gain": 0.27138383671092936,
+      "new_duration_seconds": 0.4759999999999991,
+      "attack_inferred": false,
+      "pitch_inferred": true,
+      "dynamics_inferred": true,
+      "voice_RMS_boost_vs_v4_2_db": 3.9343
+    }
+  ],
+  "accompaniment": {
+    "version": "adaptive-arpeggio-v2",
+    "dynamics": "onset-envelope-v1",
+    "mode": "audio-guided",
+    "right_hand_pattern": "pinch",
+    "analysis_capo": 1,
+    "inferred_attacks": 9,
+    "inferred_pitch_events": 72,
+    "rejected_grid_picks": 0,
+    "omitted_offbeats": 12,
+    "attacks": 301,
+    "notes": 376,
+    "unmapped_notes": 0,
+    "rejected_onsets": 0
+  },
+  "comparison": {
+    "status": "failed",
+    "musical_accuracy": "unverified",
+    "thresholds": {
+      "precision": 0.9,
+      "recall": 0.9,
+      "count_error": 0.1,
+      "timing_p95": 0.08,
+      "pitch_similarity": 0.9,
+      "matching_tolerance": 0.15
+    },
+    "overall": {
+      "start": 0,
+      "end": 147.1201,
+      "reference_attacks": 330,
+      "generated_attacks": 301,
+      "matched_attacks": 292,
+      "extra_attacks": 9,
+      "missing_attacks": 38,
+      "precision": 0.9701,
+      "recall": 0.8848,
+      "count_error": 0.0879,
+      "timing_p95": 0.025,
+      "pitch_similarity": 0.7131,
+      "compared_frames": 12348,
+      "failures": [
+        "漏掉起音",
+        "音高谱差异"
+      ],
+      "passed": false
+    },
+    "previous_v4_2_pitch_similarity": 0.7395,
+    "pitch_similarity_improved": false
+  }
+}

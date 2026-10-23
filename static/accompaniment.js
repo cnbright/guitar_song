@@ -2,7 +2,7 @@
 (function(root){
   'use strict';
   const E=root.StringspaceEngine,V=root.StringspaceVerification,T=root.StringspaceTranscription;
-  const VERSION='adaptive-arpeggio-v1',cache=new Map(),round=n=>Math.round(n*1000000)/1000000;
+  const VERSION='adaptive-arpeggio-v2',cache=new Map(),round=n=>Math.round(n*1000000)/1000000;
   function average(reference,start,end){
     const result=new Float64Array(reference.pitches),rate=reference.sample_rate/reference.hop;
     const lo=Math.max(0,Math.floor(start*rate)),hi=Math.min(reference.rms.length,Math.max(lo+1,Math.ceil(end*rate)));
@@ -65,6 +65,73 @@
     }
     return {style:errors.pinch<=errors.ascending?'pinch':'ascending',errors,count};
   }
+  function power(reference,start,end){
+    const rate=reference.sample_rate/reference.hop;let total=0,count=0;
+    for(let i=Math.max(0,Math.floor(start*rate));i<Math.min(reference.rms.length,Math.ceil(end*rate));i++){
+      total+=reference.rms[i]**2;count++;
+    }
+    return total/Math.max(1,count);
+  }
+  function excitation(reference,time){
+    // Predict each ringing partial's decay independently. A bass fundamental
+    // and its higher partials do not decay at the same speed.
+    const early=average(reference,time-.22,time-.14),before=average(reference,time-.13,time-.045),after=average(reference,time+.025,time+.13);
+    const residual=Float64Array.from(after,(v,p)=>{
+      const decay=Math.max(-12,Math.min(0,Math.log((before[p]+1e-8)/(early[p]+1e-8))/.09));
+      return Math.max(0,v-before[p]*Math.exp(decay*.15));
+    });
+    return {residual,after,ratio:Math.hypot(...residual)/Math.max(1e-8,Math.hypot(...after)),
+      rms:Math.sqrt(power(reference,time+.015,Math.min(reference.duration,time+.125)))};
+  }
+  function fitPitches(target,pitches){
+    const vectors=pitches.map(p=>template(p).vector),weights=pitches.map(()=>0),residual=Float64Array.from(target);
+    for(let pass=0;pass<30;pass++)for(let j=0;j<vectors.length;j++){
+      const v=vectors[j];let dot=0;for(let p=0;p<v.length;p++)dot+=v[p]*residual[p];
+      const next=Math.max(0,weights[j]+dot),delta=next-weights[j];weights[j]=next;
+      for(let p=0;p<v.length;p++)residual[p]-=delta*v[p];
+    }
+    return {weights,error:residual.reduce((sum,x)=>sum+x*x,0)/(target.reduce((sum,x)=>sum+x*x,0)||1)};
+  }
+  function support(onset,pitches){
+    const fitted=fitPitches(onset.residual,pitches);
+    return {...fitted,confidence:onset.ratio>.025?Math.max(0,1-fitted.error):0};
+  }
+  function sustain(reference,time,midi,limit,uncertain,nextPick){
+    const bounded=value=>Math.max(.001,Math.min(limit,Math.max(.06,value)));
+    if(uncertain)return {duration:bounded(nextPick-time),method:'until-next-pick'};
+    const indices=[];
+    for(let h=1;h<=5;h++){
+      const p=Math.round(midi+12*Math.log2(h))-reference.min_midi;
+      if(p>=0&&p<reference.pitches)indices.push({p,weight:1/(h*h)});
+    }
+    const rate=reference.sample_rate/reference.hop;
+    const level=frame=>indices.reduce((sum,{p,weight})=>sum+(reference.bands[frame*reference.pitches+p]||0)*weight,0);
+    const mean=(from,to)=>{let total=0,count=0;for(let i=Math.max(0,Math.floor(from*rate));i<Math.min(reference.rms.length,Math.ceil(to*rate));i++){total+=level(i);count++;}return total/Math.max(1,count);};
+    const baseline=mean(time-.13,time-.045),early=mean(time-.22,time-.14);
+    const decay=Math.max(-12,Math.min(0,Math.log((baseline+1e-8)/(early+1e-8))/.09));
+    const signal=frame=>Math.max(0,level(frame)-baseline*Math.exp(decay*(frame/rate-time+.0875)));
+    const start=Math.max(0,Math.ceil((time+.035)*rate)),end=Math.min(reference.rms.length,Math.ceil((time+limit)*rate));
+    let peak=0;for(let i=start;i<Math.min(end,Math.ceil((time+.14)*rate));i++)peak=Math.max(peak,signal(i));
+    if(!peak)return {duration:bounded(nextPick-time),method:'until-next-pick'};
+    let quiet=0;
+    for(let i=Math.ceil((time+.14)*rate);i<end;i++){
+      const smoothed=(signal(i)+signal(Math.max(start,i-1))+signal(Math.max(start,i-2)))/3;
+      quiet=smoothed<peak*.18?quiet+1:0;
+      if(quiet>=4)return {duration:bounded((i-quiet+1)/rate-time),method:'harmonic-envelope'};
+    }
+    return {duration:limit,method:'harmonic-envelope'};
+  }
+  function dynamics(onset,pitches){
+    // Reconstruct the simplified pick's loudness from the local source envelope,
+    // independently of uncertain pitch coefficients. Never use a minimum gain.
+    // The instrument's RMS calibration converts source amplitude into playback gain.
+    const fit=fitPitches(onset.residual,pitches),maximum=Math.max(...fit.weights,0);
+    const reliable=fit.error<.55&&maximum>0&&fit.weights.every(w=>w>=maximum*.25);
+    const mixture=fitPitches(onset.after,pitches);
+    const weights=reliable?fit.weights:Math.hypot(...mixture.weights)>0?mixture.weights:pitches.map(()=>1),norm=Math.hypot(...weights);
+    return {gains:weights.map((w,i)=>onset.rms*w/(norm*V.instrumentRMS(pitches[i]))),
+      method:reliable?'source-envelope-and-partials':'source-envelope-and-mixture-partials',inferred:!reliable};
+  }
   function arrange(features,config,title){
     const reference=features.acoustic;
     if(!reference)throw new Error('这份旧作品缺少原音节奏数据，请重新导入音乐。');
@@ -104,7 +171,7 @@
     for(const bar of measures)if(bar.beat_times.at(-1)<=features.meta.duration+.05)for(let i=0;i<config.meter;i++){
       quarterTotal++;if(near(bar.beat_times[i],bar.beat_times[i+1]-bar.beat_times[i]).length)quarterHits++;
     }
-    let inferredAttacks=0,omittedOffbeats=0;
+    let inferredAttacks=0,omittedOffbeats=0,rejectedGrid=0,rejectedOnsets=0;
     for(const bar of measures){
       const anchors=bar.beat_times.slice(0,-1).filter((t,i)=>near(t,bar.beat_times[i+1]-t).length).length;
       const barPeak=Math.max(...attacks.filter(a=>a.time>=bar.start-.08&&a.time<bar.end).map(a=>a.strength),0);
@@ -130,49 +197,67 @@
         const attack=config.arpeggio_rhythm==='auto'&&options.length?options[0]:{time:t},segment=bar.segments.findLast(s=>attack.time>=s.start-.03)??bar.segments[0];
         if(segment.sounding==='N')continue;
         const time=Math.max(bar.start,attack.time),fitted=fit(reference,time,Math.min(time+step*.8,features.meta.duration),segment.sounding,analysisCapo,12);
+        let onset=excitation(reference,time);
+        // An onset-detector candidate is not sufficient if the audio contains
+        // only the predicted decay of a previously plucked string.
+        if(config.arpeggio_rhythm==='auto'&&onset.ratio<.015){
+          if(infer)rejectedGrid++;else rejectedOnsets++;continue;
+        }
         if(beat%2&&config.arpeggio_rhythm==='auto'){
           if(attack.strength<barPeak*.25&&!fitted.some(n=>n.gain>.02&&V.pitchRise(reference,n.midi,time)>1.25))continue;
         }
-        let chosen=fitted.filter(note=>!lastPitches.has(note.midi)||time-lastPitches.get(note.midi)>1.5||V.pitchRise(reference,note.midi,time)>1.1).slice(0,3);
-        // A weak middle-string pick can be masked by the bass's harmonics.
-        // Keep a simple bass / middle / upper / middle accompaniment role;
-        // do not repeatedly pluck the ringing bass just because it is loudest.
-        if(!chosen.length&&fitted.length){
-          const frets=E.voicing(E.transpose(segment.sounding,-analysisCapo)),middle=frets[3]===null?fitted[0].midi:E.OPEN[3]+frets[3]+analysisCapo;
-          const vector=average(reference,time+.035,Math.min(time+.16,features.meta.duration)),basis=template(middle),p=middle-reference.min_midi;
-          const gain=Math.max(.02,Math.min(.6,(vector[p]||0)/(basis.vector[p]*basis.norm||1)));
-          chosen=[{midi:middle,gain,strength:gain*basis.norm}];
-        }
-        // A regular four-pick recording is simplified into one consistent
-        // right-hand pattern, rather than chasing the loudest ringing partial.
+        const novel=fit(reference,time,Math.min(time+step*.8,features.meta.duration),segment.sounding,analysisCapo,12,onset.residual);
+        let pitches=novel.filter(note=>!lastPitches.has(note.midi)||V.pitchRise(reference,note.midi,time)>1.1).slice(0,3).map(n=>n.midi);
+        let pitchSource='spectral-innovation';
+        // The learned hand pattern is a prior, not an observation of a note.
+        // Strong incompatible pitch evidence can override it; ambiguity is flagged.
         if(beat%2===0&&offbeats<2&&quarterHits/quarterTotal>=.75){
-          let pitches=rolePitches(segment.sounding,analysisCapo,(beat/2)%4,learned.style);
+          pitches=rolePitches(segment.sounding,analysisCapo,(beat/2)%4,learned.style);pitchSource=segment.edited?'manual-chord':'hand-pattern';
           if(beat===0&&!segment.edited){const bass=fitted.find(n=>n.midi<=52&&n.strength>=fitted[0].strength*.4);if(bass)pitches=[bass.midi];}
-          const vector=average(reference,time+.035,Math.min(time+.16,features.meta.duration));
-          chosen=pitches.map(midi=>{
-            const existing=fitted.find(n=>n.midi===midi),basis=template(midi),p=midi-reference.min_midi;
-            const gain=existing?.gain??Math.max(.02,Math.min(.6,(vector[p]||0)/(basis.vector[p]*basis.norm||1)));
-            return {midi,gain,strength:gain*basis.norm};
-          });
+          const expected=support(onset,pitches),alternative=novel[0];
+          if(!segment.edited&&beat!==0&&alternative&&pitches.length===1&&alternative.midi%12!==pitches[0]%12&&
+            novel.error<.4&&expected.error>.75&&V.pitchRise(reference,alternative.midi,time)>1.5&&
+            (alternative.midi>52||!lastPitches.has(alternative.midi))){pitches=[alternative.midi];pitchSource='spectral-innovation';}
         }
-        for(const note of chosen){
-          let duration=Math.min(1.5,features.meta.duration-time);
-          for(const future of sequence)if(future.start>time+.03&&future.start<time+duration){
+        if(!pitches.length){
+          pitches=rolePitches(segment.sounding,analysisCapo,Math.floor(beat/2)%4,learned.style);pitchSource='hand-pattern';
+        }
+        const evidence=support(onset,pitches);
+        // A regular grid plus ringing audio is not evidence of another pick.
+        if(infer&&onset.ratio<.025){rejectedGrid++;continue;}
+        if(config.arpeggio_rhythm!=='auto'&&onset.rms<1e-5){
+          const closest=attacks.reduce((best,a)=>Math.abs(a.time-time)<Math.abs(best.time-time)?a:best);
+          onset=excitation(reference,closest.time);
+        }
+        if(onset.rms<1e-5)continue;
+        const levels=dynamics(onset,pitches);
+        const nextPick=attacks.find(a=>a.time>time+.075)?.time??Math.min(features.meta.duration,time+step);
+        for(let i=0;i<pitches.length;i++){
+          const pitchInferred=!segment.edited&&(evidence.confidence<.55||evidence.weights[i]<Math.max(...evidence.weights)*.15);
+          const midi=pitches[i];let limit=Math.min(4,features.meta.duration-time);
+          for(const future of sequence)if(future.start>time+.03&&future.start<time+limit){
             const [r,minor]=future.sounding==='N'?[-1,false]:E.parse(future.sounding);
-            if(![r,(r+(minor?3:4))%12,(r+7)%12].includes(note.midi%12)){duration=future.start-time;break;}
+            if(![r,(r+(minor?3:4))%12,(r+7)%12].includes(midi%12)){limit=future.start-time;break;}
           }
-          notes.push({...note,time,duration,inferred:infer,amplitude:Math.min(1,note.gain),id:String(notes.length),bar:bar.number});
+          const envelope=sustain(reference,time,midi,limit,pitchInferred,nextPick),gain=levels.gains[i];
+          if(!Number.isFinite(gain)||gain<=0)continue;
+          notes.push({midi,gain,time,duration:envelope.duration,inferred:infer||pitchInferred,attack_inferred:infer,pitch_inferred:pitchInferred,
+            attack_source:config.arpeggio_rhythm!=='auto'?'manual-grid':infer?'spectral-grid':'detected',
+            pitch_source:pitchSource,pitch_confidence:round(evidence.confidence),dynamics_method:levels.method,dynamics_inferred:levels.inferred,
+            duration_method:envelope.method,amplitude:Math.min(1,gain),id:String(notes.length),bar:bar.number});
         }
-        if(infer&&chosen.length)inferredAttacks++;
-        for(const note of chosen)lastPitches.set(note.midi,time);
+        if(infer&&pitches.length)inferredAttacks++;
+        for(const midi of pitches)lastPitches.set(midi,time);
       }
     }
     const mapped=T.finger(notes,config.capo,config.max_fret);
     for(const note of mapped.notes){
       const bar=measures[note.bar-1];let event=bar.events.find(e=>Math.abs(e.time-note.time)<.001);
       if(!event){event={time:note.time,beat:round(T.timeToBeat(bar.beat_times,note.time)),duration:.5,direction:null,notes:[]};bar.events.push(event);}
-      event.inferred=note.inferred;
-      event.notes.push({id:note.id,string:note.string,fret:note.fret,midi:note.midi,gain:note.gain,duration_seconds:note.duration,onset_offset:0});
+      event.inferred=event.inferred||note.inferred;event.attack_inferred=note.attack_inferred;event.pitch_inferred=event.pitch_inferred||note.pitch_inferred;event.attack_source=note.attack_source;
+      event.notes.push({id:note.id,string:note.string,fret:note.fret,midi:note.midi,gain:note.gain,duration_seconds:note.duration,onset_offset:0,
+        pitch_inferred:note.pitch_inferred,pitch_source:note.pitch_source,pitch_confidence:note.pitch_confidence,
+        dynamics_method:note.dynamics_method,dynamics_inferred:note.dynamics_inferred,duration_method:note.duration_method});
     }
     const names=['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
     for(const bar of measures){
@@ -196,9 +281,11 @@
     const lowest=bassEvidence.length?Math.min(...bassEvidence.map(n=>n.midi)):40;
     return {...base,config,offset:start,measures,chords:unique.map(name=>({name,frets:E.voicing(name),sounding:E.transpose(name,config.capo)})),beat_times:grid,performance_notes:mapped.notes,algorithm:VERSION,
       capo_suggestions:base.capo_suggestions.filter(s=>s.capo<=lowest-40),review_count:sequence.filter(s=>s.confidence<.55&&!s.edited&&s.sounding!=='N').length,
-      accompaniment:{version:VERSION,mode:config.arpeggio_rhythm==='auto'?'audio-guided':'fixed-rhythm',right_hand_pattern:learned.style,analysis_capo:analysisCapo,inferred_attacks:inferredAttacks,omitted_offbeats:omittedOffbeats,attacks:measures.reduce((s,b)=>s+b.events.length,0),notes:mapped.notes.length,unmapped_notes:mapped.dropped},
+      accompaniment:{version:VERSION,dynamics:'onset-envelope-v1',mode:config.arpeggio_rhythm==='auto'?'audio-guided':'fixed-rhythm',right_hand_pattern:learned.style,analysis_capo:analysisCapo,inferred_attacks:inferredAttacks,
+        inferred_pitch_events:measures.reduce((s,b)=>s+b.events.filter(e=>e.pitch_inferred).length,0),rejected_grid_picks:rejectedGrid,rejected_onsets:rejectedOnsets,
+        omitted_offbeats:omittedOffbeats,attacks:measures.reduce((s,b)=>s+b.events.length,0),notes:mapped.notes.length,unmapped_notes:mapped.dropped},
       warnings:[config.arpeggio_rhythm==='auto'?'按原音的起音节奏与和弦音进行简化分解，未使用神经网络逐音转录。':'按手动选择的分解疏密重新编配节奏。','简化会省略装饰音，自动和弦和弦位仍需校对。']};
   }
-  const api={VERSION,average,fit,chordCandidates,rolePitches,learnStyle,arrange};root.StringspaceAccompaniment=api;
+  const api={VERSION,average,fit,chordCandidates,rolePitches,learnStyle,excitation,support,dynamics,sustain,arrange};root.StringspaceAccompaniment=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

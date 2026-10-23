@@ -2,6 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {Midi}=require('@tonejs/midi');
 const E=require('../static/engine.js'),V=require('../static/verification.js'),T=require('../static/transcription.js');
 require('../static/accompaniment.js');
+const A=globalThis.StringspaceAccompaniment;
 function recording(count=4,pitches=[[48],[55],[60,64],[55]],times=null){
   // An independent guitar-like fixture with annotated attacks, not the app's synth.
   const sr=22050,samples=new Float32Array(Math.round(sr*2.3));
@@ -90,4 +91,74 @@ test('MIDI retains real adaptive timing, durations and dynamics; XML stays label
   actual.forEach((n,i)=>{assert.equal(n.midi,expected[i].midi);assert.ok(Math.abs(n.time-(expected[i].time-s.offset))<.003);});
   assert.match(E.musicxml(s),/简化分解/);assert.doesNotMatch(E.musicxml(s),/逐音转录/);
   assert.match(E.textTab(s),/简化分解/);
+});
+
+test('missing fundamental energy cannot turn a visible middle-string pick into a minimum-gain placeholder',()=>{
+  const normal=recording(),masked=structuredClone(normal);
+  for(let frame=0;frame<masked.acoustic.rms.length;frame++)masked.acoustic.bands[frame*masked.acoustic.pitches+55-masked.acoustic.min_midi]=0;
+  const before=E.arrange(normal,{bpm:120,offset:.1,overrides:{'0':'C'}},'clear');
+  const after=E.arrange(masked,{bpm:120,offset:.1,overrides:{'0':'C'}},'masked');
+  const a=before.measures[0].events[1].notes[0],b=after.measures[0].events[1].notes[0];
+  assert.equal(a.midi,55);assert.equal(b.midi,55);
+  assert.ok(b.gain/a.gain>.8&&b.gain/a.gain<1.2);
+  assert.equal(after.accompaniment.dynamics,'onset-envelope-v1');
+  assert.ok(after.performance_notes.every(n=>Number.isFinite(n.gain)&&n.gain>0&&n.gain!==.02));
+});
+
+test('generated dynamics follow source amplitude without a minimum loudness floor',()=>{
+  const normal=recording(),quiet=structuredClone(normal),factor=.02;
+  quiet.acoustic.rms=Float32Array.from(quiet.acoustic.rms,x=>x*factor);
+  quiet.acoustic.bands=Float32Array.from(quiet.acoustic.bands,x=>x*factor);
+  const a=E.arrange(normal,{bpm:120,offset:.1},'normal'),b=E.arrange(quiet,{bpm:120,offset:.1},'quiet');
+  assert.deepEqual(a.performance_notes.map(n=>n.midi),b.performance_notes.map(n=>n.midi));
+  for(let i=0;i<a.performance_notes.length;i++)assert.ok(Math.abs(b.performance_notes[i].gain/a.performance_notes[i].gain-factor)<.001);
+});
+
+test('a ringing bass alone cannot create a missing pick on the regular grid',()=>{
+  const sr=22050,samples=new Float32Array(Math.round(sr*2.3));
+  for(const [time,midi,duration] of [[.1,48,1.7],[1.1,60,.3],[1.6,64,.3]]){
+    for(let i=0;i<duration*sr;i++){
+      const t=i/sr,f=440*2**((midi-69)/12);
+      samples[Math.round(time*sr)+i]+=.15*Math.min(1,t/.004)*Math.exp(-3*t)*Math.min(1,(duration-t)/.02)*(Math.sin(2*Math.PI*f*t)+.4*Math.sin(4*Math.PI*f*t));
+    }
+  }
+  const features=E.analyze(samples);features.acoustic=V.extract(samples);
+  const result=E.arrange(features,{bpm:120,offset:.1},'rest under bass');
+  assert.equal(result.measures[0].events.length,3);
+  assert.equal(result.accompaniment.inferred_attacks,0);
+  assert.ok(result.accompaniment.rejected_grid_picks>=1);
+  // Even an upstream false positive cannot bypass the decay check.
+  features.attacks.push({time:.575,strength:.5});features.attacks.sort((a,b)=>a.time-b.time);
+  const falseOnset=E.arrange(features,{bpm:120,offset:.1},'false onset under bass');
+  assert.equal(falseOnset.measures[0].events.length,3);
+  assert.ok(falseOnset.accompaniment.rejected_onsets>=1);
+});
+
+test('clear alternative chord-tone evidence overrides the middle-string hand pattern',()=>{
+  const score=E.arrange(recording(4,[[48],[52],[60],[64]]),{bpm:120,offset:.1},'different middle string');
+  assert.equal(score.measures[0].events[1].notes[0].midi,52);
+  assert.equal(score.measures[0].events[1].notes[0].pitch_source,'spectral-innovation');
+});
+
+test('a clearly ended source note does not get a fixed 1.5-second sustain',()=>{
+  const score=E.arrange(recording(),{bpm:120,offset:.1},'short source notes');
+  const first=score.measures[0].events[0].notes[0];
+  assert.equal(first.duration_method,'harmonic-envelope');
+  assert.ok(first.duration_seconds>.15&&first.duration_seconds<.7,first.duration_seconds);
+});
+
+test('uncertain source pitch and onset have separate provenance',()=>{
+  const features=recording(),time=.6;
+  // An upstream candidate with no new acoustic content is rejected.
+  const lo=Math.floor((time+.015)*22050/256),hi=Math.ceil((time+.14)*22050/256);
+  features.acoustic.bands.fill(0,lo*49,hi*49);
+  const empty=E.arrange(features,{bpm:120,offset:.1},'no excitation');
+  assert.ok(!empty.measures[0].events.some(e=>Math.abs(e.time-time)<.07));
+  // A broadband excitation supports an attack, without confirming a guitar pitch.
+  features.acoustic.bands.fill(.5,lo*49,hi*49);
+  const score=E.arrange(features,{bpm:120,offset:.1},'known onset uncertain pitch');
+  const event=score.measures[0].events[1];
+  assert.equal(event.attack_inferred,false);assert.equal(event.pitch_inferred,true);assert.equal(event.inferred,true);
+  assert.equal(event.notes[0].duration_method,'until-next-pick');
+  assert.ok(event.notes[0].gain>0);
 });

@@ -100,3 +100,12 @@ test('balancing keeps volume order and local phrasing, with a bounded boost',()=
   const quieter=V.scoreNotes(make(gains.map(g=>g/2))).map(n=>n.level);
   for(let i=0;i<levels.length;i++)assert.ok(Math.abs(quieter[i]*2-levels[i])<1e-12);
 });
+
+test('new source-derived dynamics are rendered directly without the legacy playback boost',()=>{
+  const score={bpm:120,accompaniment:{dynamics:'onset-envelope-v1'},measures:[{events:[
+    {time:.1,duration_seconds:.5,notes:[{midi:44,gain:.4}]},
+    {time:.6,duration_seconds:.3,notes:[{midi:56,gain:.02}]}
+  ]}]};
+  assert.deepEqual(V.scoreNotes(score).map(n=>n.level),[.4,.02]);
+  assert.match(V.rendererVersion(score),/onset-envelope-v1$/);
+});
