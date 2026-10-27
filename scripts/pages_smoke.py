@@ -42,11 +42,20 @@ def main():
         page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert score['comparison']['renderer_version']==('iowa-acoustic-v1-onset-envelope-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
+        assert score['comparison']['renderer_version']==('iowa-acoustic-v1-onset-envelope-v1-musical-arrangement-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert any('/instruments/acoustic-guitar.bin' in url for url in requests)
         if score.get('accompaniment'):
             assert score['config']['pattern']=='arpeggio'
-            assert score['accompaniment']['version']=='adaptive-arpeggio-v2'
+            assert score['accompaniment']['version']=='adaptive-arpeggio-v3'
+            assert score['arrangement']['version']=='musical-arrangement-v1'
+            if args.aihe:
+                assert score['arrangement']['status']=='ready'
+                assert score['arrangement']['resolved_source_events']>0
+                assert page.locator('#tab-grid .review-marker').count()==0
+                page.locator('#source-markers').check()
+                assert page.locator('#tab-grid .review-marker').count()>0
+                page.locator('#source-markers').uncheck()
+                assert page.locator('#tab-grid .review-marker').count()==0
             assert score['accompaniment']['dynamics']=='onset-envelope-v1'
             assert page.evaluate('StringspaceVerification.scoreNotes(state.score).every(n=>state.score.measures.flatMap(b=>b.events).some(e=>Math.abs(e.time-n.time)<.001 && e.notes.some(x=>x.midi===n.midi && x.gain===n.level)))')
             assert not score.get('source_notes') and not score.get('quality')
@@ -80,7 +89,7 @@ def main():
         if score['comparison']['status']=='failed':
             assert page.locator('#print-button').is_disabled()
             assert page.locator('[data-export="midi"]').get_attribute('aria-disabled')=='true'
-            assert ('待校对' if score.get('accompaniment') else '未通过验收') in page.locator('.success-tag').inner_text()
+            assert ('已定稿' if score.get('arrangement',{}).get('status')=='ready' else '待校对' if score.get('accompaniment') else '未通过验收') in page.locator('.success-tag').inner_text()
         # Both sources restart at exactly the same bounded selection.
         page.locator('#ab-start').fill('0.75')
         page.locator('#ab-end').fill('1.4')
@@ -117,7 +126,7 @@ def main():
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert page.evaluate('state.score.comparison.renderer_version')==('iowa-acoustic-v1-onset-envelope-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
+        assert page.evaluate('state.score.comparison.renderer_version')==('iowa-acoustic-v1-onset-envelope-v1-musical-arrangement-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert page.evaluate('JSON.stringify(state.score.measures)')==saved_events
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')

@@ -74,7 +74,7 @@
       return notes;
     });
   }
-  const rendererVersion=score=>(root.StringspaceGuitar?.VERSION??'additive-v1')+(score.accompaniment?(score.accompaniment.dynamics==='onset-envelope-v1'?'-onset-envelope-v1':'-balanced-v1'):'');
+  const rendererVersion=score=>(root.StringspaceGuitar?.VERSION??'additive-v1')+(score.accompaniment?(score.accompaniment.dynamics==='onset-envelope-v1'?'-onset-envelope-v1':'-balanced-v1'):'')+(score.arrangement?'-'+score.arrangement.version:'');
   const rmsCalibration=new Map();
   function instrumentRMS(midi){
     const guitar=root.StringspaceGuitar,key=(guitar?.ready?guitar.VERSION:'additive-v1')+':'+midi;
@@ -164,6 +164,7 @@
       end:i+1<score.measures.length?score.measures[i+1].start-.08:score.duration}));
     const comparison=compare(reference,generated,ranges);
     comparison.renderer_version=rendererVersion(score);
+    if(score.arrangement)comparison.arrangement_scope=score.arrangement.scope;
     if(score.accompaniment)comparison.estimation_note='简化分解使用原音起音检测作节奏输入，起音对比核验编配是否额外加密或错位，不是独立的识别准确率评估。';
     return comparison;
   }

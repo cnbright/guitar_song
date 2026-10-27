@@ -175,6 +175,14 @@ function acceptScore(score) {
   $('#chord-cards').innerHTML = score.chords.map(chordCard).join('');
   $('#score-count').textContent = `${score.measures.length} 小节 · ${clock(score.duration)}`;
   $('#review-text').textContent = score.quality ? '检测到的音符仍可能有漏音、泛音误识别或不便弹的指法。请先用“原音对照”检查短片段；点和弦只修改标注，逐音编辑可导出到打谱软件。' : `${score.review_count} 处和弦建议复核。点击和弦可重新简化该处音符；${score.accompaniment?'分解节奏跟随原音，仍可能省略装饰音或弱音。':'当前使用固定节奏。'}`;
+  const arranged=score.arrangement;
+  $('#arrangement-summary').hidden=!arranged;$('#source-markers-field').hidden=!arranged;
+  if(arranged){
+    $('#arrangement-summary').textContent=`伴奏编配：${arranged.resolved_source_events} 处原音识别不确定位置已按和弦、弦序与指法定稿；${arranged.pending_events} 处仍需校对。编配选择不代表原音音符已获确认。`;
+    $('#workspace-state').textContent=arranged.status==='ready'?'简化伴奏已编配 · 可对照练习':'伴奏编配仍需校对';
+    $('.success-tag').textContent=arranged.status==='ready'?'伴奏编配 · 已定稿':'伴奏编配 · 待校对';
+    $('#quality-banner').textContent=`${arranged.status==='ready'?'已通过伴奏编配检查。':'伴奏编配有待校对的位置。'} ${arranged.resolved_source_events} 处按和弦、重复弦序和可弹指法作出编配选择，${arranged.changed_events} 处调整音符。和弦可继续手动校对；${comparisonPassed?'原音声学对照达到当前自动门槛，仍需试听。':'原音还原验收仍未通过，这不是逐音还原的原曲谱。'}`;
+  }
   $$('[data-export]').forEach(link => {
     const kind = link.dataset.export;
     link.dataset.downloadUrl = BROWSER_MODE ? window.StringspaceBrowser.exportURL(score, kind) : `/api/jobs/${state.id}/export/${kind}`;
@@ -264,10 +272,13 @@ function measureHTML(bar, print = false) {
   for(let i=0;i<slots;i++) svg += `<text x="${xpos(i/2)}" y="128" text-anchor="middle" fill="#acb69f" font-size="7">${i%2 ? '&' : 1+i/2}</text>`;
   bar.events.forEach(event => {
     const x = xpos(event.beat);
-    if(event.inferred){
+    const sourceMarkers=!print&&$('#source-markers').checked;
+    const pending=event.arrangement?.status==='needs-review';
+    if(pending||event.inferred&&(!event.arrangement||sourceMarkers)){
       const reason=event.attack_source==='manual-grid'?'手动节奏，音高仍需对照原音校对':event.attack_inferred?(event.pitch_inferred?'起音与音高仍有推断，请对照原音校对':'弱起音由局部变化与节奏推断，请对照原音校对'):
         event.pitch_inferred?'检测到起音，音高仍由右手型推断，请对照原音校对':'按规则补齐的弱起音，请对照原音校对';
-      svg+=`<text x="${x}" y="14" text-anchor="middle" fill="#ad7e3c" font-size="10"><title>${reason}</title>?</text>`;
+      const title=pending?event.arrangement.issues.join('；'):event.arrangement?'原音诊断：'+reason+'；当前音符是按伴奏规则确定的编配选择':reason;
+      svg+=`<text class="review-marker" x="${x}" y="14" text-anchor="middle" fill="#ad7e3c" font-size="10"><title>${esc(title)}</title>?</text>`;
     }
     if (event.direction) svg += `<text x="${x}" y="14" text-anchor="middle" fill="#9eac8f" font-size="12">${event.direction === 'down' ? '↓' : '↑'}</text>`;
     // Each column is an eighth-note slot, with stems showing playable rhythm.
@@ -289,6 +300,7 @@ function renderPage() {
   $$('#tab-grid [data-segment]').forEach(button => button.addEventListener('click', () => editChord(button.dataset.segment)));
 }
 function pageBy(delta) { stopPlayback(); state.page += delta; renderPage(); }
+$('#source-markers').addEventListener('change',renderPage);
 $('#previous-page').addEventListener('click', () => pageBy(-1));
 $('#next-page').addEventListener('click', () => pageBy(1));
 function highlight(time, follow = true) {

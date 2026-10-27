@@ -1,0 +1,100 @@
+{
+  "version": "musical-arrangement-v1",
+  "scope": "按给定和弦、节奏织体与可弹指法作出的伴奏编配决定，不表示原音中的音符已经确认。",
+  "reference_seconds": 147.12,
+  "capo": 1,
+  "musical_arrangement": {
+    "version": "musical-arrangement-v1",
+    "type": "simplified-accompaniment",
+    "status": "ready",
+    "resolved_events": 301,
+    "pending_events": 0,
+    "source_uncertain_events": 74,
+    "resolved_source_events": 74,
+    "changed_events": 2,
+    "unmapped_notes": 0,
+    "scope": "按给定和弦、节奏织体与可弹指法作出的伴奏编配决定，不表示原音中的音符已经确认。"
+  },
+  "changes": [
+    {
+      "measure": 14,
+      "time": 25.158200138542693,
+      "before": [
+        {
+          "string": 1,
+          "fret": 0,
+          "midi": 65
+        }
+      ],
+      "after": [
+        {
+          "string": 3,
+          "fret": 2,
+          "midi": 58
+        }
+      ],
+      "basis": [
+        "按低音—中弦—高双音—中弦编配",
+        "调整和弦音与音区，使重复织体和指法一致",
+        "保持原有拨弦次数与时间"
+      ]
+    },
+    {
+      "measure": 50,
+      "time": 91.58444017264401,
+      "before": [
+        {
+          "string": 2,
+          "fret": 3,
+          "midi": 63
+        }
+      ],
+      "after": [
+        {
+          "string": 3,
+          "fret": 2,
+          "midi": 58
+        }
+      ],
+      "basis": [
+        "按低音—中弦—高双音—中弦编配",
+        "调整和弦音与音区，使重复织体和指法一致",
+        "保持原有拨弦次数与时间"
+      ]
+    }
+  ],
+  "attacks": 301,
+  "notes": 376,
+  "checks": {
+    "javascript_tests": 59,
+    "full_reference_browser_workflow": true,
+    "first_8_chord_regions_and_inversion_preserved": true,
+    "default_reference_score_pending_questions": 0,
+    "source_markers_available_on_request": true,
+    "MIDI_XML_and_playback_share_final_notes": true
+  },
+  "source_comparison": {
+    "status": "failed",
+    "musical_accuracy": "unverified",
+    "overall": {
+      "start": 0,
+      "end": 147.1201,
+      "reference_attacks": 330,
+      "generated_attacks": 301,
+      "matched_attacks": 292,
+      "extra_attacks": 9,
+      "missing_attacks": 38,
+      "precision": 0.9701,
+      "recall": 0.8848,
+      "count_error": 0.0879,
+      "timing_p95": 0.025,
+      "pitch_similarity": 0.7131,
+      "compared_frames": 12348,
+      "failures": [
+        "漏掉起音",
+        "音高谱差异"
+      ],
+      "passed": false
+    }
+  }
+}

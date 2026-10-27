@@ -1,9 +1,10 @@
 'use strict';
-importScripts('./guitar.js?v=5');
-importScripts('./engine.js?v=5');
-importScripts('./verification.js?v=5');
-importScripts('./transcription.js?v=5');
-importScripts('./accompaniment.js?v=5');
+importScripts('./guitar.js?v=6');
+importScripts('./engine.js?v=6');
+importScripts('./verification.js?v=6');
+importScripts('./transcription.js?v=6');
+importScripts('./arrangement.js?v=6');
+importScripts('./accompaniment.js?v=6');
 self.onmessage=async event=>{
   try{
     if(event.data.kind==='verify'){
