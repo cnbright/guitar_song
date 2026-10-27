@@ -6,16 +6,17 @@
   <meta name="theme-color" content="#f7f8f4">
   <title>弦间 · 把喜欢的音乐，变成你的吉他谱</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
-  <link rel="stylesheet" href="./style.css?v=7">
-  <script src="./site-config.js?v=7" defer></script>
-  <script src="./engine.js?v=7" defer></script>
-  <script src="./guitar.js?v=7" defer></script>
-  <script src="./verification.js?v=7" defer></script>
-  <script src="./transcription.js?v=7" defer></script>
-  <script src="./arrangement.js?v=7" defer></script>
-  <script src="./accompaniment.js?v=7" defer></script>
-  <script src="./browser-backend.js?v=7" defer></script>
-  <script src="./app.js?v=7" defer></script>
+  <link rel="stylesheet" href="./style.css?v=8">
+  <script src="./site-config.js?v=8" defer></script>
+  <script src="./engine.js?v=8" defer></script>
+  <script src="./guitar.js?v=8" defer></script>
+  <script src="./verification.js?v=8" defer></script>
+  <script src="./transcription.js?v=8" defer></script>
+  <script src="./notation.js?v=8" defer></script>
+  <script src="./arrangement.js?v=8" defer></script>
+  <script src="./accompaniment.js?v=8" defer></script>
+  <script src="./browser-backend.js?v=8" defer></script>
+  <script src="./app.js?v=8" defer></script>
 </head>
 <body>
 <svg class="icon-defs" aria-hidden="true"><defs>
@@ -114,12 +115,12 @@
         <div id="tab-grid" class="tab-grid"></div>
         <div class="pagination"><button id="previous-page" class="secondary">← 上一页</button><span id="page-label"></span><button id="next-page" class="secondary">下一页 →</button></div>
         <div class="playback-panel panel"><button id="play-score" class="play-button" aria-label="试听生成的伴奏"><svg><use href="#i-play"/></svg></button><div class="playback-description"><strong id="playback-label">试听编配</strong><small>木吉他实录采样 · 按谱面力度播放</small></div><button id="compare-source" class="secondary">原音对照</button><label class="speed-label">练习速度<select id="playback-speed"><option value="0.5">0.5 ×</option><option value="0.75">0.75 ×</option><option value="1" selected>1.0 ×</option><option value="1.25">1.25 ×</option></select></label><button id="delete-button" class="text-button delete-button">删除此作品</button></div>
-        <p class="score-disclaimer">自动简化分解跟随检测到的原音节奏；拍弦、闷音与装饰音可能被简化。手动固定疏密、扫弦会改写节奏，请先对照原音试听。</p>
+        <p class="score-disclaimer">谱面按十六分音符与三连音整理，试听保留演奏时间；乐句与力度标记为编配建议。拍弦、闷音与装饰音可能被简化。手动固定疏密、扫弦会改写节奏，请先对照原音试听。</p>
       </div>
       <div class="workspace-footer"><span>六根弦，无限可能。</span><span>DESIGNED FOR YOUR NEXT SONG</span></div>
     </section>
   </div>
-  <footer class="site-footer"><span>弦间 <span class="footer-divider">/</span> 让每一份喜欢，都有谱可循。</span><span>简化伴奏编配 v6.1</span></footer>
+  <footer class="site-footer"><span>弦间 <span class="footer-divider">/</span> 让每一份喜欢，都有谱可循。</span><span>简化伴奏编配 v7.0</span></footer>
 </main>
 <dialog id="chord-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><span class="result-eyebrow">MAKE IT YOURS</span><h2>校对这个和弦</h2><p id="edit-description"></p><label class="field">选择左手指型<select id="edit-chord"></select></label><p class="field-hint">保存后会同步更新六线谱、试听和导出内容。</p><button id="save-chord" class="primary">应用修改</button><button id="reset-chord" class="text-button reset-chord">恢复自动识别</button></dialog>
 <dialog id="help-dialog"><form method="dialog"><button class="dialog-close" aria-label="关闭">×</button></form><span class="result-eyebrow">A QUICK START</span><h2>三步，开始你的下一首歌</h2><ol><li><strong>导入音乐</strong><p>选择音乐文件或带有音轨的视频。清晰的吉他伴奏比复杂的乐队混音更容易识别。</p></li><li><strong>定制编配</strong><p>选择分解和弦或扫弦，设置变调夹。生成后可参考推荐品位，让左手更轻松。</p></li><li><strong>试听、校对、练习</strong><p>点击谱面上的和弦即可修改。橙色圆点表示建议复核。用原音对照节拍，再打印或导出到打谱软件。</p></li></ol><div class="help-note">当前版本生成弹唱伴奏，支持大、小三和弦。指弹独奏（旋律 + 低音）尚未实现。分解和弦是伴奏织体，不等同于指弹独奏。</div><p class="field-hint">文件仅在运行此应用的机器上分析，不发送至第三方服务。作品保存在本机，点击“删除此作品”可移除该作品音轨与分析数据。</p></dialog>
