@@ -168,7 +168,7 @@
   function musicxml(score){
     const meter=score.config.meter,barTicks=meter*480;
     const pitches=[['C',0],['C',1],['D',0],['E',-1],['E',0],['F',0],['F',1],['G',0],['A',-1],['A',0],['B',-1],['B',0]];
-    const label=score.performance_notes?'简化分解':'逐音转录草稿';
+    const label=score.arrangement?'简化分解 · 伴奏编配（不代表原音逐音还原）':score.performance_notes?'简化分解':'逐音转录草稿';
     let xml=`<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><work><work-title>${xmlEscape(score.title)} · ${label}</work-title></work><part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list><part id="P1">`;
     const rest=(ticks,voice)=>ticks>0?`<note><rest/><duration>${ticks}</duration><voice>${voice}</voice></note>`:'';
     for(const bar of score.measures){
@@ -206,6 +206,7 @@
   }
   function textTab(score){
     const lines=[score.title+' · '+(score.performance_notes?'简化分解':'逐音转录草稿'),`Capo ${score.config.capo} | ${score.bpm} BPM（小节随起音校正）`,'每列为一次起音，列间不等时。精确时值请使用 MIDI 或 MusicXML。',''];
+    if(score.arrangement)lines.splice(1,0,'伴奏编配：按和弦、重复弦序和可弹指法定稿；不代表原音逐音还原。');
     for(const bar of score.measures){
       lines.push(`第 ${bar.number} 小节 · ${bar.start.toFixed(3)}s · `+bar.segments.map(s=>s.display_shape??s.shape).join(' → '));
       const rows=Array.from({length:6},()=>[]);

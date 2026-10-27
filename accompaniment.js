@@ -2,7 +2,8 @@
 (function(root){
   'use strict';
   const E=root.StringspaceEngine,V=root.StringspaceVerification,T=root.StringspaceTranscription;
-  const VERSION='adaptive-arpeggio-v2',cache=new Map(),round=n=>Math.round(n*1000000)/1000000;
+  const M=root.StringspaceArrangement??(typeof module!=='undefined'&&module.exports?require('./arrangement.js'):null);
+  const VERSION='adaptive-arpeggio-v3',cache=new Map(),round=n=>Math.round(n*1000000)/1000000;
   function average(reference,start,end){
     const result=new Float64Array(reference.pitches),rate=reference.sample_rate/reference.hop;
     const lo=Math.max(0,Math.floor(start*rate)),hi=Math.min(reference.rms.length,Math.max(lo+1,Math.ceil(end*rate)));
@@ -279,12 +280,13 @@
     }
     const unique=[...new Set(measures.flatMap(b=>b.segments).map(s=>s.shape).filter(s=>s!=='N'))];
     const lowest=bassEvidence.length?Math.min(...bassEvidence.map(n=>n.midi)):40;
-    return {...base,config,offset:start,measures,chords:unique.map(name=>({name,frets:E.voicing(name),sounding:E.transpose(name,config.capo)})),beat_times:grid,performance_notes:mapped.notes,algorithm:VERSION,
+    if(!M)throw new Error('伴奏编配组件未加载，请刷新页面。');
+    return M.finalize({...base,config,offset:start,measures,chords:unique.map(name=>({name,frets:E.voicing(name),sounding:E.transpose(name,config.capo)})),beat_times:grid,performance_notes:mapped.notes,algorithm:VERSION,
       capo_suggestions:base.capo_suggestions.filter(s=>s.capo<=lowest-40),review_count:sequence.filter(s=>s.confidence<.55&&!s.edited&&s.sounding!=='N').length,
       accompaniment:{version:VERSION,dynamics:'onset-envelope-v1',mode:config.arpeggio_rhythm==='auto'?'audio-guided':'fixed-rhythm',right_hand_pattern:learned.style,analysis_capo:analysisCapo,inferred_attacks:inferredAttacks,
         inferred_pitch_events:measures.reduce((s,b)=>s+b.events.filter(e=>e.pitch_inferred).length,0),rejected_grid_picks:rejectedGrid,rejected_onsets:rejectedOnsets,
         omitted_offbeats:omittedOffbeats,attacks:measures.reduce((s,b)=>s+b.events.length,0),notes:mapped.notes.length,unmapped_notes:mapped.dropped},
-      warnings:[config.arpeggio_rhythm==='auto'?'按原音的起音节奏与和弦音进行简化分解，未使用神经网络逐音转录。':'按手动选择的分解疏密重新编配节奏。','简化会省略装饰音，自动和弦和弦位仍需校对。']};
+      warnings:[config.arpeggio_rhythm==='auto'?'按原音的起音节奏与和弦音进行简化分解，未使用神经网络逐音转录。':'按手动选择的分解疏密重新编配节奏。','编配定稿不等于原音逐音还原，和弦仍可手动校对。']});
   }
   const api={VERSION,average,fit,chordCandidates,rolePitches,learnStyle,excitation,support,dynamics,sustain,arrange};root.StringspaceAccompaniment=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
