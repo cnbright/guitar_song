@@ -1,0 +1,296 @@
+{
+  "source": "1_Bubble Gum - Clairo_(Instrumental).wav",
+  "source_sha256": "921725e9cbedb64b9c997e2abe13d3fc7c8bb87b1633b11c676d1ae677bd185f",
+  "style": "保留原曲氛围，改善声部与乐句",
+  "implementation": {
+    "voices": "independent bass, inner and upper voice octave paths with confident acoustic anchors and joint guitar fingering checks",
+    "phrases": "rest / repeated chord signature / maximum eight-bar suggestions, not semantic section recognition",
+    "engraving": "independent notation grid; per-string rests, beat splits, tie chains, typed durations, dots, beams and tuplets",
+    "performance": "no extra attacks, no added gain shaping; MIDI/WAV keep source timing while MusicXML uses the explicitly quantized notation view"
+  },
+  "browser": {
+    "comparison": {
+      "start": 0,
+      "end": 175.9608,
+      "reference_attacks": 508,
+      "generated_attacks": 485,
+      "matched_attacks": 485,
+      "extra_attacks": 0,
+      "missing_attacks": 23,
+      "precision": 1,
+      "recall": 0.9547,
+      "count_error": 0.0453,
+      "timing_p95": 0.025,
+      "pitch_similarity": 0.707,
+      "compared_frames": 13090,
+      "failures": [
+        "音高谱差异"
+      ],
+      "passed": false
+    },
+    "arrangement": {
+      "version": "musical-arrangement-v3",
+      "type": "simplified-accompaniment",
+      "status": "needs-review",
+      "resolved_events": 339,
+      "pending_events": 146,
+      "source_uncertain_events": 63,
+      "resolved_source_events": 57,
+      "changed_events": 48,
+      "unmapped_notes": 0,
+      "scope": "按给定和弦、节奏织体与可弹指法作出的伴奏编配决定，不表示原音中的音符已经确认。",
+      "notation_review_events": 12
+    },
+    "music_form": {
+      "version": "phrase-plan-v1",
+      "phrases": [
+        {
+          "id": 1,
+          "start_measure": 1,
+          "end_measure": 1,
+          "start": 0.083,
+          "end": 1.847706,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "p"
+        },
+        {
+          "id": 2,
+          "start_measure": 2,
+          "end_measure": 9,
+          "start": 1.847706,
+          "end": 15.629,
+          "reason": "八小节整理建议",
+          "estimated": true,
+          "dynamic": "f"
+        },
+        {
+          "id": 3,
+          "start_measure": 10,
+          "end_measure": 12,
+          "start": 15.629,
+          "end": 20.911,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 4,
+          "start_measure": 13,
+          "end_measure": 16,
+          "start": 20.911,
+          "end": 27.889,
+          "reason": "和声序列重复",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 5,
+          "start_measure": 17,
+          "end_measure": 20,
+          "start": 27.889,
+          "end": 34.843,
+          "reason": "和声序列重复",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 6,
+          "start_measure": 21,
+          "end_measure": 28,
+          "start": 34.843,
+          "end": 49.019,
+          "reason": "八小节整理建议",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 7,
+          "start_measure": 29,
+          "end_measure": 36,
+          "start": 49.019,
+          "end": 63.09,
+          "reason": "八小节整理建议",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 8,
+          "start_measure": 37,
+          "end_measure": 37,
+          "start": 63.09,
+          "end": 64.867,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "mp"
+        },
+        {
+          "id": 9,
+          "start_measure": 38,
+          "end_measure": 45,
+          "start": 64.867,
+          "end": 79.193,
+          "reason": "八小节整理建议",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 10,
+          "start_measure": 46,
+          "end_measure": 52,
+          "start": 79.193,
+          "end": 91.346554,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 11,
+          "start_measure": 53,
+          "end_measure": 56,
+          "start": 91.346554,
+          "end": 98.267685,
+          "reason": "和声序列重复",
+          "estimated": true,
+          "dynamic": "mp"
+        },
+        {
+          "id": 12,
+          "start_measure": 57,
+          "end_measure": 60,
+          "start": 98.267685,
+          "end": 105.212968,
+          "reason": "和声序列重复",
+          "estimated": true,
+          "dynamic": "f"
+        },
+        {
+          "id": 13,
+          "start_measure": 61,
+          "end_measure": 68,
+          "start": 105.212968,
+          "end": 118.946,
+          "reason": "八小节整理建议",
+          "estimated": true,
+          "dynamic": "f"
+        },
+        {
+          "id": 14,
+          "start_measure": 69,
+          "end_measure": 76,
+          "start": 118.946,
+          "end": 132.762,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 15,
+          "start_measure": 77,
+          "end_measure": 80,
+          "start": 132.762,
+          "end": 139.809,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 16,
+          "start_measure": 81,
+          "end_measure": 84,
+          "start": 139.809,
+          "end": 146.752,
+          "reason": "和声序列重复",
+          "estimated": true,
+          "dynamic": "mf"
+        },
+        {
+          "id": 17,
+          "start_measure": 85,
+          "end_measure": 88,
+          "start": 146.752,
+          "end": 154.145325,
+          "reason": "和声序列重复",
+          "estimated": true,
+          "dynamic": "mp"
+        },
+        {
+          "id": 18,
+          "start_measure": 89,
+          "end_measure": 96,
+          "start": 154.145325,
+          "end": 167.894,
+          "reason": "八小节整理建议",
+          "estimated": true,
+          "dynamic": "mp"
+        },
+        {
+          "id": 19,
+          "start_measure": 97,
+          "end_measure": 98,
+          "start": 167.894,
+          "end": 171.319303,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "p"
+        },
+        {
+          "id": 20,
+          "start_measure": 99,
+          "end_measure": 99,
+          "start": 171.319303,
+          "end": 173.040517,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "p"
+        },
+        {
+          "id": 21,
+          "start_measure": 100,
+          "end_measure": 100,
+          "start": 173.040517,
+          "end": 174.761731,
+          "reason": "休止或呼吸",
+          "estimated": true,
+          "dynamic": "p"
+        },
+        {
+          "id": 22,
+          "start_measure": 101,
+          "end_measure": 101,
+          "start": 174.761731,
+          "end": 175.961,
+          "reason": "乐曲结尾",
+          "estimated": true,
+          "dynamic": "p"
+        }
+      ],
+      "scope": "依休止、和声重复与长度整理的乐句建议，不代表已识别主歌或副歌。"
+    },
+    "notation": {
+      "bars": 101,
+      "review_events": 12
+    },
+    "checks": [
+      "full audio",
+      "XML well formed",
+      "phrase labels",
+      "old cache migration",
+      "five exports",
+      "A/B playback",
+      "mobile overflow",
+      "no console errors"
+    ]
+  },
+  "tests": {
+    "javascript": 73,
+    "python": 17
+  },
+  "limits": [
+    "Automatic chord labels are still major/minor triads and require musical judgment.",
+    "Phrase boundaries and relative dynamics are suggestions, not verified composer annotations.",
+    "Acoustic acceptance still fails. This iteration targets musical arrangement and readable notation, not verified note transcription.",
+    "Collapsed notes or excessive notation quantization errors remain counted for review.",
+    "Python local arrangement was not changed."
+  ]
+}

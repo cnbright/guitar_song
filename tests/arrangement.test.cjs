@@ -46,7 +46,7 @@ test('authoring decisions preserve the number and time of picks, including spars
   }
 });
 test('unresolved rhythmic conflicts remain visible and are never labelled ready',()=>{
-  const source=fixture();source.measures[0].events[1].beat=.27;
+  const source=fixture();source.measures[0].events[1].beat=.12;
   const score=R.finalize(source);
   assert.equal(score.arrangement.status,'needs-review');
   assert.equal(score.measures[0].events[1].arrangement.status,'needs-review');assert.equal(score.arrangement.pending_events,1);
@@ -66,4 +66,39 @@ test('musical finalization preserves confident acoustic non-triad tones',()=>{
   assert.equal(score.measures[0].events[1].notes[0].midi,57);
   assert.equal(score.measures[0].events[1].arrangement.changed,false);
   assert.equal(score.arrangement.changed_events,1);
+});
+
+test('voice leading looks ahead to a confident anchor instead of greedily fixing each pick',()=>{
+ const source=fixture([[43],[57],[59,67],[54]],{max_fret:12});
+ source.measures[0].events=[source.measures[0].events[1]];
+ const bar=structuredClone(source.measures[0]);bar.number=2;bar.start=2;bar.end=4;bar.beat_times=bar.beat_times.map(t=>t+2);
+ bar.segments[0].start=2;bar.segments[0].end=4;
+ const anchor=bar.events[0];anchor.time+=2;
+ Object.assign(anchor.notes[0],{id:'anchor',midi:67,pitch_source:'spectral-innovation',pitch_confidence:.95,pitch_inferred:false});
+ source.measures.push(bar);source.duration=4;
+ const snapshot=JSON.stringify(source),plan=R.voicePlan(source);
+ assert.deepEqual(plan.get(.5),[67]);assert.equal(plan.has(2.5),false);
+ assert.equal(JSON.stringify(source),snapshot);
+});
+
+test('repeated harmonic phrases are suggested without adding attacks or inventing verse labels',()=>{
+ const source=fixture(),bars=[];
+ for(let i=0;i<8;i++){
+  const b=structuredClone(source.measures[0]);b.number=i+1;b.start=i*2;b.end=(i+1)*2;b.beat_times=b.beat_times.map(t=>t+i*2);
+  for(const e of b.events)e.time+=i*2;
+  b.segments[0].sounding=['G','C','D','G'][i%4];bars.push(b);
+ }
+ source.measures=bars;source.duration=16;
+ const plan=R.phrases(source);
+ assert.deepEqual(plan.map(p=>[p.start_measure,p.end_measure]),[[1,4],[5,8]]);
+ assert.equal(plan[0].reason,'和声序列重复');assert.ok(plan.every(p=>p.estimated));
+});
+
+test('sixteenth and triplet positions are valid music notation and performance stays untouched',()=>{
+ const source=fixture();source.measures[0].events[1].beat=.27;
+ const snapshot=source.measures[0].events.map(e=>e.time),score=R.finalize(source);
+ assert.equal(score.measures[0].events[1].arrangement.status,'resolved');
+ assert.deepEqual(score.measures[0].events.map(e=>e.time),snapshot);
+ assert.equal(score.measures[0].events[1].notation.beat,.25);
+ assert.ok(score.notation.performance_timing_preserved);
 });

@@ -170,6 +170,7 @@
     const pitches=[['C',0],['C',1],['D',0],['E',-1],['E',0],['F',0],['F',1],['G',0],['A',-1],['A',0],['B',-1],['B',0]];
     const label=score.arrangement?'简化分解 · 伴奏编配（不代表原音逐音还原）':score.performance_notes?'简化分解':'逐音转录草稿';
     let xml=`<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><work><work-title>${xmlEscape(score.title)} · ${label}</work-title></work><part-list><score-part id="P1"><part-name>Guitar</part-name></score-part></part-list><part id="P1">`;
+    const engraved=score.notation?.version?score.notation:null;
     const rest=(ticks,voice)=>ticks>0?`<note><rest/><duration>${ticks}</duration><voice>${voice}</voice></note>`:'';
     for(const bar of score.measures){
       xml+=`<measure number="${bar.number}">`;
@@ -185,6 +186,46 @@
         const bass=segment.display_shape&&Number.isInteger(segment.bass_midi)?pitches[(segment.bass_midi-score.config.capo+120)%12]:null;
         xml+=`<harmony><root><root-step>${step}</root-step>${alter?`<root-alter>${alter}</root-alter>`:''}</root><kind>${m?'minor':'major'}</kind>${bass?`<bass><bass-step>${bass[0]}</bass-step>${bass[1]?`<bass-alter>${bass[1]}</bass-alter>`:''}</bass>`:''}<offset>${Math.round(timeToBeat(bar.beat_times,segment.start)*480)}</offset></harmony>`;
       }
+      if(engraved){
+        const plan=engraved.bars.find(b=>b.number===bar.number);
+        if(bar.phrase?.start)xml+=`<direction><direction-type><rehearsal>乐句 ${bar.phrase.id}</rehearsal></direction-type></direction><direction><direction-type><dynamics><${bar.phrase.dynamic}/></dynamics></direction-type></direction>`;
+        for(const voice of plan.voices){
+          if(voice.string>1)xml+=`<backup><duration>${plan.ticks}</duration></backup>`;
+          const items=voice.items;
+          for(let i=0;i<items.length;i++){
+            const item=items[i],short=item.ticks<=240,group=Math.floor(item.start/480);
+            const previous=items[i-1],next=items[i+1];
+            const before=short&&!item.rest&&previous&&!previous.rest&&previous.ticks<=240&&Math.floor(previous.start/480)===group;
+            const after=short&&!item.rest&&next&&!next.rest&&next.ticks<=240&&Math.floor(next.start/480)===group;
+            const [step,alter]=pitches[(item.midi??0)%12];
+            xml+='<note>'+(item.rest?'<rest/>':`<pitch><step>${step}</step>${alter?`<alter>${alter}</alter>`:''}<octave>${Math.floor(item.midi/12)-1}</octave></pitch>`);
+            xml+=`<duration>${item.ticks}</duration>`;
+            if(item.tie_stop)xml+='<tie type="stop"/>';
+            if(item.tie_start)xml+='<tie type="start"/>';
+            xml+=`<voice>${voice.string}</voice><type>${item.type}</type>${item.dots?'<dot/>':''}`;
+            if(item.triplet)xml+='<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>';
+            if(before||after)xml+=`<beam number="1">${before?(after?'continue':'end'):'begin'}</beam>`;
+            if(before||after){
+              const depth=value=>value?.type==='32nd'?3:value?.type==='16th'?2:1;
+              for(let level=2;level<=depth(item);level++){
+                const left=before&&depth(previous)>=level,right=after&&depth(next)>=level;
+                xml+=`<beam number="${level}">${left?(right?'continue':'end'):right?'begin':after?'forward hook':'backward hook'}</beam>`;
+              }
+            }
+            if(!item.rest||item.triplet){
+              xml+='<notations>'+(item.tie_stop?'<tied type="stop"/>':'')+(item.tie_start?'<tied type="start"/>':'');
+              if(item.triplet){
+                if(!previous?.triplet||Math.floor(previous.start/480)!==group)xml+='<tuplet type="start" number="1" bracket="yes"/>';
+                if(!next?.triplet||Math.floor(next.start/480)!==group)xml+='<tuplet type="stop" number="1"/>';
+              }
+              if(!item.rest)xml+=`<technical><string>${voice.string}</string><fret>${item.fret}</fret></technical>`;
+              xml+='</notations>';
+            }
+            xml+='</note>';
+          }
+        }
+        if(bar.phrase?.end)xml+='<barline location="right"><bar-style>light-light</bar-style></barline>';
+      }else{
       for(let voice=1;voice<=6;voice++){
         if(voice>1)xml+=`<backup><duration>${barTicks}</duration></backup>`;
         let position=0;
@@ -200,6 +241,7 @@
         }
         xml+=rest(barTicks-position,voice);
       }
+      }
       xml+='</measure>';
     }
     return xml+'</part></score-partwise>';
@@ -208,12 +250,14 @@
     const lines=[score.title+' · '+(score.performance_notes?'简化分解':'逐音转录草稿'),`Capo ${score.config.capo} | ${score.bpm} BPM（小节随起音校正）`,'每列为一次起音，列间不等时。精确时值请使用 MIDI 或 MusicXML。',''];
     if(score.arrangement)lines.splice(1,0,'伴奏编配：按和弦、重复弦序和可弹指法定稿；不代表原音逐音还原。');
     for(const bar of score.measures){
+      if(bar.phrase?.start)lines.push(`乐句 ${bar.phrase.id} · ${bar.phrase.dynamic}（编配建议）`);
       lines.push(`第 ${bar.number} 小节 · ${bar.start.toFixed(3)}s · `+bar.segments.map(s=>s.display_shape??s.shape).join(' → '));
       const rows=Array.from({length:6},()=>[]);
       for(const event of bar.events){
         for(let string=1;string<=6;string++){const note=event.notes.find(n=>n.string===string);rows[string-1].push(note?String(note.fret).padStart(2,'-').padEnd(4,'-'):'----');}
       }
       ['e','B','G','D','A','E'].forEach((label,i)=>lines.push(label+'|'+rows[i].join('')+'|'));
+      if(bar.events.some(e=>e.notation))lines.push('谱面拍位：'+bar.events.map(e=>e.notation?.beat.toFixed(3)??e.beat.toFixed(3)).join(', '));
       lines.push('起音秒数：'+bar.events.map(e=>e.time.toFixed(3)).join(', '),'');
     }
     return lines.join('\n');

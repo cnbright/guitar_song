@@ -1,11 +1,11 @@
 {
   "name": "stringspace-guitar",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "private": true,
   "scripts": {
     "build:model": "node scripts/build_model.cjs",
     "build": "npm run build:model && python3 scripts/build_pages.py",
-    "test": "node --test tests/browser_engine.test.cjs tests/transcription.test.cjs tests/verification.test.cjs tests/accompaniment.test.cjs tests/guitar.test.cjs tests/arrangement.test.cjs"
+    "test": "node --test tests/browser_engine.test.cjs tests/transcription.test.cjs tests/verification.test.cjs tests/accompaniment.test.cjs tests/guitar.test.cjs tests/arrangement.test.cjs tests/notation.test.cjs"
   },
   "dependencies": {
     "@spotify/basic-pitch": "1.0.1",

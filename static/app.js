@@ -178,7 +178,7 @@ function acceptScore(score) {
   const arranged=score.arrangement;
   $('#arrangement-summary').hidden=!arranged;$('#source-markers-field').hidden=!arranged;
   if(arranged){
-    $('#arrangement-summary').textContent=`伴奏编配：${arranged.resolved_source_events} 处原音识别不确定位置已按和弦、弦序与指法定稿；${arranged.pending_events} 处仍需校对。编配选择不代表原音音符已获确认。`;
+    $('#arrangement-summary').textContent=`伴奏编配：${arranged.resolved_source_events} 处原音识别不确定位置已按和弦、弦序与指法定稿；${arranged.pending_events} 处仍需校对。${score.music_form?` 按 ${score.music_form.phrases.length} 个建议乐句整理声部与节奏，力度为相对建议。`:''}编配选择不代表原音音符已获确认。`;
     $('#workspace-state').textContent=arranged.status==='ready'?'简化伴奏已编配 · 可对照练习':'伴奏编配仍需校对';
     $('.success-tag').textContent=arranged.status==='ready'?'伴奏编配 · 已定稿':'伴奏编配 · 待校对';
     $('#quality-banner').textContent=`${arranged.status==='ready'?'已通过伴奏编配检查。':'伴奏编配有待校对的位置。'} ${arranged.resolved_source_events} 处按和弦、重复弦序和可弹指法作出编配选择，${arranged.changed_events} 处调整音符。和弦可继续手动校对；${comparisonPassed?'原音声学对照达到当前自动门槛，仍需试听。':'原音还原验收仍未通过，这不是逐音还原的原曲谱。'}`;
@@ -270,8 +270,9 @@ function measureHTML(bar, print = false) {
   svg += '<path d="M25 27V97M262 27V97"/></g>';
   ['e','B','G','D','A','E'].forEach((string,i) => svg += `<text x="10" y="${30+i*14}" fill="#a6b19c" font-size="8" font-family="monospace">${string}</text>`);
   for(let i=0;i<slots;i++) svg += `<text x="${xpos(i/2)}" y="128" text-anchor="middle" fill="#acb69f" font-size="7">${i%2 ? '&' : 1+i/2}</text>`;
+  const engraving=state.score.notation?.bars.find(b=>b.number===bar.number);
   bar.events.forEach(event => {
-    const x = xpos(event.beat);
+    const x = xpos(event.notation&&event.notation.error<=.08?event.notation.beat:event.beat);
     const sourceMarkers=!print&&$('#source-markers').checked;
     const pending=event.arrangement?.status==='needs-review';
     if(pending||event.inferred&&(!event.arrangement||sourceMarkers)){
@@ -281,14 +282,40 @@ function measureHTML(bar, print = false) {
       svg+=`<text class="review-marker" x="${x}" y="14" text-anchor="middle" fill="#ad7e3c" font-size="10"><title>${esc(title)}</title>?</text>`;
     }
     if (event.direction) svg += `<text x="${x}" y="14" text-anchor="middle" fill="#9eac8f" font-size="12">${event.direction === 'down' ? '↓' : '↑'}</text>`;
-    // Each column is an eighth-note slot, with stems showing playable rhythm.
+    if(!engraving){
     svg += `<path d="M${x} 100V113" stroke="#9aa98b" stroke-width=".8"/>`;
     if(event.duration <= .51) svg += `<path d="M${x} 112l6 -3" stroke="#9aa98b" stroke-width="1.3"/>`;
     event.notes.forEach(note => { const y=27+(note.string-1)*14; svg += `<rect x="${x-5}" y="${y-6}" width="10" height="12" rx="2" fill="white"/><text x="${x}" y="${y+3.7}" text-anchor="middle" fill="#3d5735" font-size="10.5" font-family="monospace">${note.fret}</text>`; });
+    }
   });
+  if(engraving){
+    const columns=new Map();
+    for(const voice of engraving.voices)for(const item of voice.items)if(!item.rest){
+      const x=xpos(item.start/480),y=27+(voice.string-1)*14;
+      svg+=`<rect x="${x-5}" y="${y-6}" width="10" height="12" rx="2" fill="white"/><text x="${x}" y="${y+3.7}" text-anchor="middle" fill="#3d5735" font-size="10.5" font-family="monospace">${item.fret}</text>`;
+      if(item.tie_start){const end=Math.min(meter-.04,(item.start+item.ticks)/480);svg+=`<path d="M${x+4} ${y+5}Q${(x+xpos(end))/2} ${y+12} ${xpos(end)-4} ${y+5}" stroke="#819371" stroke-width=".8" fill="none"/>`;}
+      if(!columns.has(item.start)||columns.get(item.start).ticks>item.ticks)columns.set(item.start,item);
+    }
+    const ordered=[...columns.values()].sort((a,b)=>a.start-b.start);
+    ordered.forEach((item,i)=>{
+      const x=xpos(item.start/480);svg+=`<path d="M${x} 100V113" stroke="#9aa98b" stroke-width=".8"/>`;
+      const previous=ordered[i-1],next=ordered[i+1];
+      if(item.ticks<=240){
+        const joined=next&&next.ticks<=240&&Math.floor(next.start/480)===Math.floor(item.start/480);
+        if(joined)svg+=`<path d="M${x} 112H${xpos(next.start/480)}" stroke="#9aa98b" stroke-width="1.7"/>`;
+        else if(!previous||previous.ticks>240||Math.floor(previous.start/480)!==Math.floor(item.start/480))svg+=`<path d="M${x} 112l6 -3" stroke="#9aa98b" stroke-width="1.3"/>`;
+        if(item.type==='16th'||item.type==='32nd')svg+=`<path d="M${x} 108l6 -3" stroke="#9aa98b" stroke-width="1.2"/>`;
+      }
+      if(item.triplet)svg+=`<text x="${x+3}" y="121" font-size="6" fill="#819371">3</text>`;
+      if(item.dots)svg+=`<circle cx="${x+5}" cy="111" r="1.2" fill="#819371"/>`;
+    });
+    for(const item of engraving.voices[0].items)if(item.rest&&!engraving.voices.some(v=>v.items.some(n=>!n.rest&&n.start<=item.start&&n.start+n.ticks>item.start))){
+      svg+=`<text x="${xpos(item.start/480)}" y="111" text-anchor="middle" font-size="12" fill="#819371">𝄽</text>`;
+    }
+  }
   if(!bar.events.length) svg += '<text x="140" y="65" text-anchor="middle" fill="#9ca88f" font-size="11">休止</text>';
   svg += '</svg>';
-  return `<article class="measure" data-measure="${bar.number}"><div class="measure-header"><span class="measure-number">${String(bar.number).padStart(2,'0')}</span>${bar.segments.map(segment => `<${print ? 'span' : 'button'} class="chord-button ${segment.edited ? 'edited' : segment.confidence < .55 && segment.sounding !== 'N' ? 'review' : ''}" data-segment="${segment.id}" title="${esc(segment.sounding)} · 点击校对">${segment.shape === 'N' ? '休止' : esc(segment.display_shape??segment.shape)}</${print ? 'span' : 'button'}>`).join('<span style="font-size:9px;color:#c2cbb9">→</span>')}<span class="measure-time">${clock(bar.start)}</span></div>${svg}</article>`;
+  return `<article class="measure" data-measure="${bar.number}">${bar.phrase?.start?`<div class="phrase-label">乐句 ${bar.phrase.id} · ${bar.phrase.dynamic} <small>建议</small></div>`:''}<div class="measure-header"><span class="measure-number">${String(bar.number).padStart(2,'0')}</span>${bar.segments.map(segment => `<${print ? 'span' : 'button'} class="chord-button ${segment.edited ? 'edited' : segment.confidence < .55 && segment.sounding !== 'N' ? 'review' : ''}" data-segment="${segment.id}" title="${esc(segment.sounding)} · 点击校对">${segment.shape === 'N' ? '休止' : esc(segment.display_shape??segment.shape)}</${print ? 'span' : 'button'}>`).join('<span style="font-size:9px;color:#c2cbb9">→</span>')}<span class="measure-time">${clock(bar.start)}</span></div>${svg}</article>`;
 }
 function renderPage() {
   if (!state.score) return;
@@ -402,7 +429,7 @@ $('#ab-original').addEventListener('click',async()=>{
 $('#print-button').addEventListener('click', () => {
   if(!state.score||!exportAllowed()) return;
   const s=state.score;
-  $('#print-score').innerHTML=`<h1>${esc(s.title)}${BROWSER_MODE&&s.comparison?.status!=='passed'?' · 未通过验收草稿':''}</h1><p>${s.bpm} BPM · ${s.config.meter}/4 · 变调夹 ${s.config.capo} 品 · ${patternName(s.config.pattern)} · 和弦名为指型，数字相对变调夹</p><p>${s.quality?'逐音转录草稿，可能漏音、多音或选错弦位，请逐段校对。':(s.accompaniment?'跟随原音节奏与低音的简化分解，装饰音可能省略。':'固定节奏的简化编配。')} 起拍：${s.offset.toFixed(3)} 秒。</p><div class="chord-cards">${s.chords.map(chordCard).join('')}</div><div class="tab-grid">${s.measures.map(bar=>measureHTML(bar,true)).join('')}</div>`;
+  $('#print-score').innerHTML=`<h1>${esc(s.title)}${BROWSER_MODE&&s.comparison?.status!=='passed'?' · 未通过验收草稿':''}</h1><p>${s.bpm} BPM · ${s.config.meter}/4 · 变调夹 ${s.config.capo} 品 · ${patternName(s.config.pattern)} · 和弦名为指型，数字相对变调夹</p><p>${s.quality?'逐音转录草稿，可能漏音、多音或选错弦位，请逐段校对。':(s.accompaniment?'按乐句与声部整理的吉他伴奏。谱面整理为十六分音符或三连音，试听保留演奏时间；装饰音可能省略。':'固定节奏的简化编配。')} 起拍：${s.offset.toFixed(3)} 秒。</p><div class="chord-cards">${s.chords.map(chordCard).join('')}</div><div class="tab-grid">${s.measures.map(bar=>measureHTML(bar,true)).join('')}</div>`;
   window.print();
 });
 $('#help-button').addEventListener('click', () => $('#help-dialog').showModal());
