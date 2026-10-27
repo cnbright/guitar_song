@@ -3,7 +3,7 @@
   'use strict';
   const E=root.StringspaceEngine,V=root.StringspaceVerification,T=root.StringspaceTranscription;
   const M=root.StringspaceArrangement??(typeof module!=='undefined'&&module.exports?require('./arrangement.js'):null);
-  const VERSION='adaptive-arpeggio-v3',cache=new Map(),round=n=>Math.round(n*1000000)/1000000;
+  const VERSION='adaptive-arpeggio-v4',cache=new Map(),round=n=>Math.round(n*1000000)/1000000;
   function average(reference,start,end){
     const result=new Float64Array(reference.pitches),rate=reference.sample_rate/reference.hop;
     const lo=Math.max(0,Math.floor(start*rate)),hi=Math.min(reference.rms.length,Math.max(lo+1,Math.ceil(end*rate)));
@@ -18,9 +18,12 @@
     return cache.get(midi);
   }
   function fit(reference,start,end,chord,capo,maxFret,overrideTarget){
-    const [r,minor]=E.parse(chord),pcs=[r,(r+(minor?3:4))%12,(r+7)%12],candidates=[];
-    const ceiling=Math.max(...E.voicing(E.transpose(chord,-capo)).map((f,i)=>f===null?0:E.OPEN[i]+f+capo));
-    for(let midi=overrideTarget?40:40+capo;midi<=(overrideTarget?76:Math.min(88,64+capo+maxFret,ceiling));midi++)if(pcs.includes(midi%12))candidates.push({midi,...template(midi)});
+    const [r,minor]=chord?E.parse(chord):[0,false],pcs=chord?[r,(r+(minor?3:4))%12,(r+7)%12]:Array.from({length:12},(_,i)=>i),candidates=[];
+    const ceiling=chord?Math.max(...E.voicing(E.transpose(chord,-capo)).map((f,i)=>f===null?0:E.OPEN[i]+f+capo)):64+capo+maxFret;
+    const fullChordDictionary=overrideTarget&&chord;
+    const lowest=fullChordDictionary?40:40+capo,highest=fullChordDictionary?76:Math.min(88,64+capo+maxFret,ceiling);
+    for(let midi=lowest;midi<=highest;midi++)if(pcs.includes(midi%12)&&
+      (chord||E.OPEN.some(open=>midi-open-capo>=0&&midi-open-capo<=maxFret)))candidates.push({midi,...template(midi)});
     const target=overrideTarget??average(reference,start+.035,Math.min(start+.16,end)),residual=Float64Array.from(target),weights=new Float64Array(candidates.length);
     const penalty=Math.hypot(...target)*.018;
     for(let loop=0;loop<35;loop++)for(let j=0;j<candidates.length;j++){
@@ -183,19 +186,30 @@
         return segment.sounding!=='N'&&(a.strength>=barPeak*.25||fit(reference,a.time,a.time+step*.8,segment.sounding,analysisCapo,12).some(n=>n.gain>.02&&V.pitchRise(reference,n.midi,a.time)>1.25));
       }).length;
       const regular=quarterHits/quarterTotal>=.85&&anchors>=config.meter-1&&offbeats<2;
-      for(let beat=0;beat<config.meter*2;beat++){
+      // In auto mode the detected attacks define the performance timeline.
+      // A beat grid is for notation, not a filter for syncopation or rubato.
+      const picks=config.arpeggio_rhythm==='auto'
+        ?attacks.filter(a=>a.time>=(bar.number===1?bar.start-.08:bar.start)&&a.time<bar.end).map(attack=>({attack,beat:Math.max(0,Math.min(config.meter*2-1,Math.round(T.timeToBeat(bar.beat_times,attack.time)*2)))}))
+        :Array.from({length:config.meter*2},(_,beat)=>({beat}));
+      if(config.arpeggio_rhythm==='auto')for(let beat=0;beat<config.meter*2;beat+=2){
+        const time=bar.beat_times[beat/2],step=bar.beat_times[beat/2+1]-time;
+        if(!near(time,step).length&&quarterHits/quarterTotal>=.75&&anchors>=config.meter-1&&(offbeats===0||regular))picks.push({beat});
+      }
+      picks.sort((a,b)=>(a.attack?.time??bar.beat_times[a.beat/2])-(b.attack?.time??bar.beat_times[b.beat/2]));
+      for(const pick of picks){
+        const beat=pick.beat;
         if(config.arpeggio_rhythm==='quarter'&&beat%2)continue;
         const t=bar.beat_times[Math.floor(beat/2)]+(beat%2)*(bar.beat_times[Math.floor(beat/2)+1]-bar.beat_times[Math.floor(beat/2)])/2;
-        if(t>=bar.end-.03)continue;
+        if((pick.attack?.time??t)>=bar.end-.001)continue;
         const step=(bar.beat_times[Math.floor(beat/2)+1]-bar.beat_times[Math.floor(beat/2)]);
         const options=near(t,step).sort((a,b)=>Math.abs(a.time-t)-Math.abs(b.time-t));
-        if(config.arpeggio_rhythm==='auto'&&beat%2&&offbeats<2&&(anchors===config.meter||regular)){if(options.length)omittedOffbeats++;continue;}
+
         const frame=Math.min(reference.rms.length-1,Math.round(t*reference.sample_rate/reference.hop));
         // Complete one masked weak beat only when this bar and the recording
         // strongly support a regular pulse. Two-pick patterns are not doubled.
-        const infer=config.arpeggio_rhythm==='auto'&&!options.length&&beat%2===0&&(offbeats===0||regular)&&quarterHits/quarterTotal>=.75&&anchors>=config.meter-1&&reference.rms[frame]>.002;
-        if(!options.length&&!infer&&config.arpeggio_rhythm==='auto')continue;
-        const attack=config.arpeggio_rhythm==='auto'&&options.length?options[0]:{time:t},segment=bar.segments.findLast(s=>attack.time>=s.start-.03)??bar.segments[0];
+        const infer=config.arpeggio_rhythm==='auto'&&!pick.attack&&!options.length&&beat%2===0&&(offbeats===0||regular)&&quarterHits/quarterTotal>=.75&&anchors>=config.meter-1&&reference.rms[frame]>.002;
+        if(!pick.attack&&!options.length&&!infer&&config.arpeggio_rhythm==='auto')continue;
+        const attack=pick.attack??(config.arpeggio_rhythm==='auto'&&options.length?options[0]:{time:t}),segment=bar.segments.findLast(s=>attack.time>=s.start-.03)??bar.segments[0];
         if(segment.sounding==='N')continue;
         const time=Math.max(bar.start,attack.time),fitted=fit(reference,time,Math.min(time+step*.8,features.meta.duration),segment.sounding,analysisCapo,12);
         let onset=excitation(reference,time);
@@ -204,9 +218,7 @@
         if(config.arpeggio_rhythm==='auto'&&onset.ratio<.015){
           if(infer)rejectedGrid++;else rejectedOnsets++;continue;
         }
-        if(beat%2&&config.arpeggio_rhythm==='auto'){
-          if(attack.strength<barPeak*.25&&!fitted.some(n=>n.gain>.02&&V.pitchRise(reference,n.midi,time)>1.25))continue;
-        }
+
         const novel=fit(reference,time,Math.min(time+step*.8,features.meta.duration),segment.sounding,analysisCapo,12,onset.residual);
         let pitches=novel.filter(note=>!lastPitches.has(note.midi)||V.pitchRise(reference,note.midi,time)>1.1).slice(0,3).map(n=>n.midi);
         let pitchSource='spectral-innovation';
@@ -223,6 +235,20 @@
         if(!pitches.length){
           pitches=rolePitches(segment.sounding,analysisCapo,Math.floor(beat/2)%4,learned.style);pitchSource='hand-pattern';
         }
+        // Harmony is an annotation/prior. Clear non-chord tones and octaves
+        // must remain available when a triad label is incomplete or wrong.
+        if(!segment.edited){
+          const chromatic=fit(reference,time,Math.min(time+step*.8,features.meta.duration),null,config.capo,config.max_fret,onset.residual);
+          const constrained=support(onset,pitches);
+          if(chromatic.length&&chromatic.error+.12<constrained.error){
+            pitches=chromatic.slice(0,3).map(n=>n.midi);pitchSource='spectral-innovation';
+          }
+        }
+        // Release transients can have positive spectral flux but no growing
+        // played pitch. Do not turn them into extra weak plucks.
+        if(pick.attack&&attack.strength<barPeak*.25&&(power(reference,time+.01,time+.04)<power(reference,time-.04,time-.01)*.65||!pitches.some(midi=>V.pitchRise(reference,midi,time)>1.25))){
+          rejectedOnsets++;continue;
+        }
         const evidence=support(onset,pitches);
         // A regular grid plus ringing audio is not evidence of another pick.
         if(infer&&onset.ratio<.025){rejectedGrid++;continue;}
@@ -236,7 +262,7 @@
         for(let i=0;i<pitches.length;i++){
           const pitchInferred=!segment.edited&&(evidence.confidence<.55||evidence.weights[i]<Math.max(...evidence.weights)*.15);
           const midi=pitches[i];let limit=Math.min(4,features.meta.duration-time);
-          for(const future of sequence)if(future.start>time+.03&&future.start<time+limit){
+          for(const future of sequence)if(pitchSource!=='spectral-innovation'&&future.start>time+.03&&future.start<time+limit){
             const [r,minor]=future.sounding==='N'?[-1,false]:E.parse(future.sounding);
             if(![r,(r+(minor?3:4))%12,(r+7)%12].includes(midi%12)){limit=future.start-time;break;}
           }
@@ -286,7 +312,7 @@
       accompaniment:{version:VERSION,dynamics:'onset-envelope-v1',mode:config.arpeggio_rhythm==='auto'?'audio-guided':'fixed-rhythm',right_hand_pattern:learned.style,analysis_capo:analysisCapo,inferred_attacks:inferredAttacks,
         inferred_pitch_events:measures.reduce((s,b)=>s+b.events.filter(e=>e.pitch_inferred).length,0),rejected_grid_picks:rejectedGrid,rejected_onsets:rejectedOnsets,
         omitted_offbeats:omittedOffbeats,attacks:measures.reduce((s,b)=>s+b.events.length,0),notes:mapped.notes.length,unmapped_notes:mapped.dropped},
-      warnings:[config.arpeggio_rhythm==='auto'?'按原音的起音节奏与和弦音进行简化分解，未使用神经网络逐音转录。':'按手动选择的分解疏密重新编配节奏。','编配定稿不等于原音逐音还原，和弦仍可手动校对。']});
+      warnings:[config.arpeggio_rhythm==='auto'?'按原音起音时间与音高证据进行简化分解，未使用神经网络逐音转录。':'按手动选择的分解疏密重新编配节奏。','简化会省略装饰音；和弦标签仅支持大、小三和弦，实际音符可含明确的非和弦音，仍需校对。']});
   }
   const api={VERSION,average,fit,chordCandidates,rolePitches,learnStyle,excitation,support,dynamics,sustain,arrange};root.StringspaceAccompaniment=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;

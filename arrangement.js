@@ -1,7 +1,7 @@
 /* Musical decisions for simplified accompaniment; not confirmation of source notes. */
 (function(root){
   'use strict';
-  const VERSION='musical-arrangement-v1',E=root.StringspaceEngine,T=root.StringspaceTranscription;
+  const VERSION='musical-arrangement-v2',E=root.StringspaceEngine,T=root.StringspaceTranscription;
   const same=(a,b)=>a.length===b.length&&[...a].sort((x,y)=>x-y).every((x,i)=>x===[...b].sort((x,y)=>x-y)[i]);
   function tones(chord){const [r,minor]=E.parse(chord);return [r,(r+(minor?3:4))%12,(r+7)%12];}
   function playable(midi,config){return E.OPEN.some(open=>midi-open-config.capo>=0&&midi-open-config.capo<=config.max_fret);}
@@ -51,7 +51,10 @@
         const harmonic=pcs.length&&event.notes.every(n=>pcs.includes(n.midi%12));
         const uncertain=!!event.inferred;
         let intended=event.notes.map(n=>n.midi);
-        if(!issues.length&&(uncertain||!harmonic)){
+        // Strong acoustic evidence can include sevenths or non-chord tones:
+        // a triad label must not rewrite those notes into a hand pattern.
+        const sourceBacked=event.notes.every(n=>n.pitch_source==='spectral-innovation'&&n.pitch_confidence>=.55&&!n.pitch_inferred);
+        if(!issues.length&&!sourceBacked&&(uncertain||!harmonic)){
           intended=fitRole(role(score,segment,event.beat,dense),segment,config,previous);
           reasons.push(dense?'按八次分解的弦序编配':score.accompaniment.right_hand_pattern==='ascending'?'按低音至高音的逐弦型编配':'按低音—中弦—高双音—中弦编配');
         }
@@ -63,7 +66,7 @@
           event.notes=intended.map((midi,i)=>({...base,id:base.id+'-arr-'+i,midi,
             gain:Math.sqrt(power/intended.length)/root.StringspaceVerification.instrumentRMS(midi),duration_seconds:duration}));
           reasons.push('调整和弦音与音区，使重复织体和指法一致');
-        }else if(!issues.length)reasons.push('保留符合和弦与织体的现有音符');
+        }else if(!issues.length)reasons.push(sourceBacked?'保留有明确声学证据的现有音符':'保留符合和弦与织体的现有音符');
         if(!issues.length&&Math.abs(event.beat)<.18&&segment.bass_midi!==undefined)reasons.push('保留转位低音走向');
         if(!issues.length)reasons.push('保持原有拨弦次数与时间');
         event.arrangement={status:issues.length?'needs-review':'resolved',basis:reasons,issues,changed,
