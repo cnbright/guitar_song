@@ -58,3 +58,12 @@ test('MIDI, playback and text export use the corrected notes and disclose accomp
   assert.deepEqual(V.scoreNotes(score).map(n=>n.midi).sort((a,b)=>a-b),midi);
   assert.match(E.musicxml(score),/伴奏编配/);assert.match(E.textTab(score),/不代表原音逐音还原/);
 });
+
+test('musical finalization preserves confident acoustic non-triad tones',()=>{
+  const source=fixture([[43],[57],[59,67],[54]]);
+  for(const note of source.measures[0].events[1].notes)Object.assign(note,{pitch_source:'spectral-innovation',pitch_confidence:.9,pitch_inferred:false});
+  const score=R.finalize(source);
+  assert.equal(score.measures[0].events[1].notes[0].midi,57);
+  assert.equal(score.measures[0].events[1].arrangement.changed,false);
+  assert.equal(score.arrangement.changed_events,1);
+});

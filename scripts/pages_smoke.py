@@ -42,12 +42,12 @@ def main():
         page.wait_for_function('(capo)=>!state.busy && state.score.config.capo === capo',arg=args.capo)
         score = page.evaluate('state.score')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert score['comparison']['renderer_version']==('iowa-acoustic-v1-onset-envelope-v1-musical-arrangement-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
+        assert score['comparison']['renderer_version']==('iowa-acoustic-v1-onset-envelope-v1-musical-arrangement-v2' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert any('/instruments/acoustic-guitar.bin' in url for url in requests)
         if score.get('accompaniment'):
             assert score['config']['pattern']=='arpeggio'
-            assert score['accompaniment']['version']=='adaptive-arpeggio-v3'
-            assert score['arrangement']['version']=='musical-arrangement-v1'
+            assert score['accompaniment']['version']==page.evaluate('StringspaceAccompaniment.VERSION')
+            assert score['arrangement']['version']==page.evaluate('StringspaceArrangement.VERSION')
             if args.aihe:
                 assert score['arrangement']['status']=='ready'
                 assert score['arrangement']['resolved_source_events']>0
@@ -126,7 +126,7 @@ def main():
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')
         assert page.evaluate('StringspaceGuitar.ready')
-        assert page.evaluate('state.score.comparison.renderer_version')==('iowa-acoustic-v1-onset-envelope-v1-musical-arrangement-v1' if score.get('accompaniment') else 'iowa-acoustic-v1')
+        assert page.evaluate('state.score.comparison.renderer_version')==('iowa-acoustic-v1-onset-envelope-v1-musical-arrangement-v2' if score.get('accompaniment') else 'iowa-acoustic-v1')
         assert page.evaluate('JSON.stringify(state.score.measures)')==saved_events
         page.reload(wait_until='networkidle')
         page.wait_for_function('state.score && !state.busy')

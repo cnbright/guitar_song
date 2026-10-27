@@ -1,0 +1,148 @@
+{
+  "source": "1_Bubble Gum - Clairo_(Instrumental).wav",
+  "duration_seconds": 175.9608,
+  "source_sha256": "921725e9cbedb64b9c997e2abe13d3fc7c8bb87b1633b11c676d1ae677bd185f",
+  "environment": "Chromium Web Audio 22050 Hz; identical decoded features for old/new generation; Iowa acoustic sampled rendering",
+  "before": {
+    "overall": {
+      "start": 0,
+      "end": 175.9608,
+      "reference_attacks": 508,
+      "generated_attacks": 364,
+      "matched_attacks": 364,
+      "extra_attacks": 0,
+      "missing_attacks": 144,
+      "precision": 1,
+      "recall": 0.7165,
+      "count_error": 0.2835,
+      "timing_p95": 0.025,
+      "pitch_similarity": 0.6085,
+      "compared_frames": 13113,
+      "failures": [
+        "漏掉起音",
+        "起音数量不符",
+        "音高谱差异"
+      ],
+      "passed": false
+    },
+    "accompaniment": {
+      "version": "adaptive-arpeggio-v2",
+      "dynamics": "onset-envelope-v1",
+      "mode": "audio-guided",
+      "right_hand_pattern": "pinch",
+      "analysis_capo": 2,
+      "inferred_attacks": 0,
+      "inferred_pitch_events": 153,
+      "rejected_grid_picks": 0,
+      "rejected_onsets": 2,
+      "omitted_offbeats": 0,
+      "attacks": 364,
+      "notes": 743,
+      "unmapped_notes": 3
+    }
+  },
+  "after": {
+    "overall": {
+      "start": 0,
+      "end": 175.9608,
+      "reference_attacks": 508,
+      "generated_attacks": 485,
+      "matched_attacks": 485,
+      "extra_attacks": 0,
+      "missing_attacks": 23,
+      "precision": 1,
+      "recall": 0.9547,
+      "count_error": 0.0453,
+      "timing_p95": 0.025,
+      "pitch_similarity": 0.7096,
+      "compared_frames": 13111,
+      "failures": [
+        "音高谱差异"
+      ],
+      "passed": false
+    },
+    "accompaniment": {
+      "version": "adaptive-arpeggio-v3",
+      "dynamics": "onset-envelope-v1",
+      "mode": "audio-guided",
+      "right_hand_pattern": "pinch",
+      "analysis_capo": 2,
+      "inferred_attacks": 0,
+      "inferred_pitch_events": 63,
+      "rejected_grid_picks": 0,
+      "rejected_onsets": 17,
+      "omitted_offbeats": 0,
+      "attacks": 485,
+      "notes": 1241,
+      "unmapped_notes": 15
+    },
+    "console_errors": [],
+    "restore": true,
+    "exports": true,
+    "mobile": true
+  },
+  "acceptance": "failed",
+  "limitations": [
+    "起音检测与生成共用输入，不是独立的人工音符准确率。",
+    "音高谱相似度仍低于 90% 门槛，整曲及分段未通过验收。",
+    "和弦标签仅支持大、小三和弦；非和弦音保留不等于七和弦标签已正确识别。",
+    "Python 本机版仍使用固定节奏基础编配；本次修复浏览器简化分解路径。"
+  ],
+  "checks": {
+    "javascript_tests": 55,
+    "browser": [
+      "full WAV generation",
+      "v2 cache regenerated to v3 with identical v3 note result",
+      "MIDI / MusicXML / TXT / JSON / WAV blobs",
+      "reload restore",
+      "390 px layout",
+      "no console errors"
+    ]
+  },
+  "deployment_merge": {
+    "source_base": "c155f0e17ab9c582e0f83281a386ba36316c00d4",
+    "generator": "adaptive-arpeggio-v4",
+    "finalizer": "musical-arrangement-v2",
+    "browser": {
+      "overall": {
+        "start": 0,
+        "end": 175.9608,
+        "reference_attacks": 508,
+        "generated_attacks": 485,
+        "matched_attacks": 485,
+        "extra_attacks": 0,
+        "missing_attacks": 23,
+        "precision": 1,
+        "recall": 0.9547,
+        "count_error": 0.0453,
+        "timing_p95": 0.025,
+        "pitch_similarity": 0.7036,
+        "compared_frames": 13084,
+        "failures": [
+          "音高谱差异"
+        ],
+        "passed": false
+      },
+      "accompaniment": {
+        "version": "adaptive-arpeggio-v4",
+        "dynamics": "onset-envelope-v1",
+        "mode": "audio-guided",
+        "right_hand_pattern": "pinch",
+        "analysis_capo": 2,
+        "inferred_attacks": 0,
+        "inferred_pitch_events": 63,
+        "rejected_grid_picks": 0,
+        "rejected_onsets": 17,
+        "omitted_offbeats": 0,
+        "attacks": 485,
+        "notes": 1241,
+        "unmapped_notes": 15
+      },
+      "console_errors": [],
+      "restore": true,
+      "exports": true,
+      "mobile": true
+    },
+    "status": "failed acoustic acceptance; no thresholds changed"
+  }
+}

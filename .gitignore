@@ -8,3 +8,4 @@ artifacts/
 node_modules/
 test-results/
 
+work/

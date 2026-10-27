@@ -162,3 +162,28 @@ test('uncertain source pitch and onset have separate provenance',()=>{
   assert.equal(event.notes[0].duration_method,'until-next-pick');
   assert.ok(event.notes[0].gain>0);
 });
+
+test('auto accompaniment keeps attacks outside the eighth-note grid',()=>{
+  const times=[.1,.48,1.28,1.76],score=E.arrange(recording(4,undefined,times),{bpm:120,offset:.1},'off-grid');
+  const events=score.measures[0].events;
+  assert.equal(events.length,times.length);
+  events.forEach((event,i)=>assert.ok(Math.abs(event.time-times[i])<.04));
+  assert.equal(score.accompaniment.inferred_attacks,0);
+  assert.deepEqual(events.map(e=>e.notes.map(n=>n.midi)),[[48],[55],[60,64],[55]]);
+});
+
+test('an incomplete triad label cannot delete clear non-chord source pitches',()=>{
+  const score=E.arrange(recording(4,[[48,52,55],[55],[59],[64]]),{bpm:120,offset:.1},'extended harmony');
+  // C major plus B is not representable by the existing major/minor labels.
+  // Keep the played notes even when the best triad label is Em.
+  assert.deepEqual(score.measures[0].events.map(e=>e.notes.map(n=>n.midi)),[[48,52,55],[55],[59],[64]]);
+  assert.equal(score.measures[0].events[0].notes[0].pitch_source,'spectral-innovation');
+});
+
+test('chromatic fitting only proposes pitches playable within the chosen fret range',()=>{
+  const f=recording(4,[[48,52,55],[55],[59],[64]]);
+  const onset=A.excitation(f.acoustic,.1);
+  const notes=A.fit(f.acoustic,.1,.4,null,0,3,onset.residual);
+  assert.ok(notes.length);
+  for(const note of notes)assert.ok(E.OPEN.some(open=>note.midi-open>=0&&note.midi-open<=3));
+});
